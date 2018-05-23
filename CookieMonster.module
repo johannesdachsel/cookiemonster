@@ -28,19 +28,26 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$page = $event->object; 
 		if($page->template == 'admin') return;
 		
+		if($this->wire('languages')) {
+            $userLanguage = $this->wire('user')->language;
+            $lang = $userLanguage->isDefault() ? '' : "__$userLanguage->id";
+        } else {
+            $lang = '';
+        }
+		
 		if(isset($_COOKIE['cmnstr'])){
 			return;
 		} else {
 			$cookieBanner = '<div class="cmnstr">';
-			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($this->bodytext).'</div>';
-			$cookieBanner .= '<button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->buttontext.'</button>';
+			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($this->{"bodytext$lang"}).'</div>';
+			$cookieBanner .= '<button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext$lang"}.'</button>';
 			$cookieBanner .= '</div>';
 			$cookieBanner .= '<style>';
 			$cookieBanner .= '.cmnstr{position:fixed; top:0; left:0; width: 100%; padding: 1em; background-color: rgba(0,0,0,.9); color: #FFF; display: flex; justify-content: space-between; align-items: center;}';
 			$cookieBanner .= '.cmnstr-body{font-size: .875em; padding:0; margin:0 1.5em 0 0; flex: 0 1 auto;}';
 			$cookieBanner .= '.cmnstr-body a{color: #FFF; text-decoration: none; border-bottom: 1px dotted #FFF;}';
 			$cookieBanner .= '.cmnstr-body a:hover{border-bottom: 1px solid #FFF;}';
-			$cookieBanner .= '.cmnstr-button{flex: 1 0 auto;}';
+			$cookieBanner .= '.cmnstr-button{flex: 1 0 auto; max-width: 250px;}';
 			$cookieBanner .= $this->custom_css;
 			$cookieBanner .= '</style>';
 			$cookieBanner .= '<script>';
@@ -68,6 +75,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('name', 'bodytext');
 		$field->attr('value', $data['bodytext']);
 		$field->columnWidth = '70';
+		$field->useLanguages = true;
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldText');
@@ -76,6 +84,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('name', 'buttontext');
 		$field->attr('value', $data['buttontext']);
 		$field->columnWidth = '30';
+		$field->useLanguages = true;
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
