@@ -20,7 +20,10 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		'custom_css' => "",
 		'use_stylesheet' => 1,
 		'is_active' => 0,
-		'multilanguage' => 0
+		'multilanguage' => 0,
+		'autolink' => 0,
+		'target_string' => '',
+		'target_page' => 1
 	);
 
 	public function init() {
@@ -43,8 +46,14 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		if(isset($_COOKIE['cmnstr'])){
 			return;
 		} else {
+			$bodyText = $this->{"bodytext$lang"};
+			
+			if($this->autolink == 1 && $this->{"target_string$lang"} != '' && $this->target_page){
+				$bodyText = str_replace($this->{"target_string$lang"}, '<a href="'.$this->wire('pages')->get($this->target_page)->url.'">'.$this->{"target_string$lang"}.'</a>', $bodyText);
+			}
+			
 			$cookieBanner = '<div class="cmnstr">';
-			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($this->{"bodytext$lang"}).'</div>';
+			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($bodyText).'</div>';
 			$cookieBanner .= '<button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext$lang"}.'</button>';
 			$cookieBanner .= '</div>';
 			$cookieBanner .= $this->custom_css ? '<style>'.$this->custom_css.'</style>' : '';
@@ -120,6 +129,35 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('value', $data['buttontext']);
 		$field->columnWidth = '30';
 		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$fields->append($field);
+		
+		$field = $modules->get('InputfieldCheckbox');
+		$field->label = __('Begriff automatisch verlinken');
+		$field->notes = __('Aktiviert die automatische Verlinkung eines Begriffs (z.B. „Datenschutz“) mit einer frei wählbaren Seite.');
+		$field->name = 'autolink';
+		$field->attr('value', $data['autolink']);
+		if($data['autolink'] == 0) $field->attr('checked', '');
+		else $field->attr('checked', 1);
+		$field->columnWidth = '100';
+		$fields->append($field);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Begriff');
+		$field->description = __('Begriff, der automatisch verlinkt werden soll');
+		$field->attr('name', 'target_string');
+		$field->attr('value', $data['target_string']);
+		$field->columnWidth = '50';
+		$field->showIf = 'autolink=1';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$fields->append($field);
+		
+		$field = $modules->get('InputfieldPageListSelect');
+		$field->label = __('Zielseite');
+		$field->description = __('Seite, die automatisch mit dem Begriff verlinkt werden soll');
+		$field->attr('name', 'target_page');
+		$field->attr('value', $data['target_page']);
+		$field->columnWidth = '50';
+		$field->showIf = 'autolink=1';
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
