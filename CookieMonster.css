@@ -29,3 +29,9 @@
 .cmnstr-button{
 	flex: 1 0 auto; max-width: 250px;
 }
+
+@media all and (max-width: 768px){
+	.cmnstr{
+		display: block;
+	}
+}
