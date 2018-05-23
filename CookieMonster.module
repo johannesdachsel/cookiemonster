@@ -1,4 +1,4 @@
-<?php namespace ProcessWire;
+<?php
 
 class CookieMonster extends WireData implements Module, ConfigurableModule {
 
@@ -19,7 +19,8 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		'buttontext' => "Akzeptieren",
 		'custom_css' => "",
 		'use_stylesheet' => 1,
-		'is_active' => 1
+		'is_active' => 0,
+		'multilanguage' => 0
 	);
 
 	public function init() {
@@ -76,24 +77,30 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->label = __('Cookie-Banner aktiviert');
 		$field->notes = __('Aktiviert die Anzeige des Cookie-Banners auf allen Seiten.');
 		$field->name = 'is_active';
-		if(!isset($data['is_active'])){
-			$field->attr('checked', 0);
-		} else {
-			$field->attr('checked', $data['is_active']);
-		}
-		$field->columnWidth = '50';
+		$field->attr('value', $data['is_active']);
+		if($data['is_active'] == 0) $field->attr('checked', '');
+		else $field->attr('checked', 1);	
+		$field->columnWidth = '34';
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldCheckbox');
 		$field->label = __('CookieMonster-Stylesheet verwenden');
 		$field->notes = __('Stellt eine einfache Basis-Formatierung zur Verfügung.');
 		$field->name = 'use_stylesheet';
-		if(!isset($data['use_stylesheet'])){
-			$field->attr('checked', 1);
-		} else {
-			$field->attr('checked', $data['use_stylesheet']);
-		}
-		$field->columnWidth = '50';
+		$field->attr('value', $data['use_stylesheet']);
+		if($data['use_stylesheet'] == 0) $field->attr('checked', '');
+		else $field->attr('checked', 1);
+		$field->columnWidth = '33';
+		$fields->append($field);
+		
+		$field = $modules->get('InputfieldCheckbox');
+		$field->label = __('Mehrsprachigkeit verwenden');
+		$field->notes = __('Aktiviert mehrsprachig pflegbare Texte.');
+		$field->name = 'multilanguage';
+		$field->attr('value', $data['multilanguage']);
+		if($data['multilanguage'] == 0) $field->attr('checked', '');
+		else $field->attr('checked', 1);
+		$field->columnWidth = '33';
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
@@ -103,7 +110,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('name', 'bodytext');
 		$field->attr('value', $data['bodytext']);
 		$field->columnWidth = '70';
-		$field->useLanguages = true;
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldText');
@@ -112,7 +119,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('name', 'buttontext');
 		$field->attr('value', $data['buttontext']);
 		$field->columnWidth = '30';
-		$field->useLanguages = true;
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
 		$fields->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
@@ -122,6 +129,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('name', 'custom_css');
 		$field->attr('value', $data['custom_css']);
 		$field->columnWidth = '100';
+		$field->collapsed = 1;
 		$fields->append($field);
 		
 		return $fields;
