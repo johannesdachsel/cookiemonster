@@ -5,7 +5,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'CookieMonster', 
-			'version' => 100, 
+			'version' => 102, 
 			'summary' => 'Fulfills GDPR madness and renders a cookie banner above your site’s content.',
 			'singular' => true, 
 			'autoload' => true, 
@@ -17,7 +17,9 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	protected static $defaults = array(
 		'bodytext' => "Diese Website verwendet Cookies, um die Nutzerfreundlichkeit zu verbessern. Durch die weitere Nutzung der Website stimmen Sie dem zu. Weitere Informationen zu Cookies und deren Deaktivierung finden Sie unter Datenschutz. Diese Website verwendet das Tracking Tool Google Analytics, damit wir unsere Website bedarfsgerecht gestalten und fortlaufend optimieren können. Durch die weitere Nutzung der Website stimmen Sie dem zu. Weitere Informationen zu Tracking Tools und deren Deaktivierung finden Sie unter Datenschutz.",
 		'buttontext' => "Akzeptieren",
-		'custom_css' => ""
+		'custom_css' => "",
+		'use_stylesheet' => 1,
+		'is_active' => 1
 	);
 
 	public function init() {
@@ -25,6 +27,8 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	}
 
 	public function addCookieBanner($event) {
+		if(!$this->is_active) return;
+		
 		$page = $event->object; 
 		if($page->template == 'admin') return;
 		
@@ -42,23 +46,23 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($this->{"bodytext$lang"}).'</div>';
 			$cookieBanner .= '<button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext$lang"}.'</button>';
 			$cookieBanner .= '</div>';
-			$cookieBanner .= '<style>';
-			$cookieBanner .= '.cmnstr{position:fixed; top:0; left:0; width: 100%; padding: 1em; background-color: rgba(0,0,0,.9); color: #FFF; display: flex; justify-content: space-between; align-items: center;}';
-			$cookieBanner .= '.cmnstr-body{font-size: .875em; padding:0; margin:0 1.5em 0 0; flex: 0 1 auto;}';
-			$cookieBanner .= '.cmnstr-body a{color: #FFF; text-decoration: none; border-bottom: 1px dotted #FFF;}';
-			$cookieBanner .= '.cmnstr-body a:hover{border-bottom: 1px solid #FFF;}';
-			$cookieBanner .= '.cmnstr-button{flex: 1 0 auto; max-width: 250px;}';
-			$cookieBanner .= $this->custom_css;
-			$cookieBanner .= '</style>';
-			$cookieBanner .= '<script>';
-			$cookieBanner .= 'function setCookieMonster(){';
-			$cookieBanner .= 'document.cookie = "cmnstr=1; expires=Fri, 31 Dec 9999 23:59:59 GMT";';
-			$cookieBanner .= 'var cmnstrBanner = document.querySelector(".cmnstr");';
-			$cookieBanner .= 'cmnstrBanner.remove();';
-			$cookieBanner .= '}';
-			$cookieBanner .= '</script>';
+			$cookieBanner .= $this->custom_css ? '<style>'.$this->custom_css.'</style>' : '';
 			
-			$event->return = str_replace("</body>", "{$cookieBanner}</body>", $event->return);	
+			$output = $event->return;
+			$folder = $this->wire('config')->urls->$this;
+			
+			// inject stylesheet
+			if($this->use_stylesheet){
+				$output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
+			}
+			
+			// inject script file
+			$output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
+			
+			$regex = '/(<body[^>]*>)/m';
+			$replace = '$1'.$cookieBanner;
+			
+			$event->return = preg_replace($regex, $replace, $output);	
 		} 
 	}
 	
@@ -67,6 +71,30 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		
 		$fields = new InputfieldWrapper();
 		$modules = wire('modules');
+		
+		$field = $modules->get('InputfieldCheckbox');
+		$field->label = __('Cookie-Banner aktiviert');
+		$field->notes = __('Aktiviert die Anzeige des Cookie-Banners auf allen Seiten.');
+		$field->name = 'is_active';
+		if(!isset($data['is_active'])){
+			$field->attr('checked', 0);
+		} else {
+			$field->attr('checked', $data['is_active']);
+		}
+		$field->columnWidth = '50';
+		$fields->append($field);
+		
+		$field = $modules->get('InputfieldCheckbox');
+		$field->label = __('CookieMonster-Stylesheet verwenden');
+		$field->notes = __('Stellt eine einfache Basis-Formatierung zur Verfügung.');
+		$field->name = 'use_stylesheet';
+		if(!isset($data['use_stylesheet'])){
+			$field->attr('checked', 1);
+		} else {
+			$field->attr('checked', $data['use_stylesheet']);
+		}
+		$field->columnWidth = '50';
+		$fields->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
 		$field->label = __('Banner-Text');
