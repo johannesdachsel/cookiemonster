@@ -7,6 +7,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 			'title' => 'CookieMonster', 
 			'version' => 103, 
 			'summary' => 'Fulfills GDPR madness and renders a cookie banner above your site’s content.',
+			'href' => 'https://github.com/johannesdachsel/cookiemonster',
 			'singular' => true, 
 			'autoload' => true, 
 			'icon' => 'github-alt',
