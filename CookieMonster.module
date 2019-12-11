@@ -5,35 +5,62 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'CookieMonster', 
-			'version' => 103, 
+			'version' => 202, 
 			'summary' => 'Fulfills GDPR madness and renders a cookie banner above your site’s content.',
 			'href' => 'https://github.com/johannesdachsel/cookiemonster',
 			'singular' => true, 
 			'autoload' => true, 
 			'icon' => 'github-alt',
-			'author' => 'Johannes Dachsel' 
+			'author' => 'Johannes Dachsel',
+			'installs' => array('TextformatterCookieTable')
 		);
 	}
 	
 	protected static $defaults = array(
-		'bodytext' => "Diese Website verwendet Cookies, um die Nutzerfreundlichkeit zu verbessern. Durch die weitere Nutzung der Website stimmen Sie dem zu. Weitere Informationen zu Cookies und deren Deaktivierung finden Sie unter Datenschutz. Diese Website verwendet das Tracking Tool Google Analytics, damit wir unsere Website bedarfsgerecht gestalten und fortlaufend optimieren können. Durch die weitere Nutzung der Website stimmen Sie dem zu. Weitere Informationen zu Tracking Tools und deren Deaktivierung finden Sie unter Datenschutz.",
-		'buttontext' => "Akzeptieren",
-		'custom_css' => "",
+		'titletext' => 'Diese Website verwendet Cookies',
+		'bodytext' => "Wir verwenden Cookies, um Ihnen ein optimales Webseiten-Erlebnis zu bieten. Dazu zählen Cookies, die für den Betrieb der Seite und für die Steuerung unserer kommerziellen Unternehmensziele notwendig sind, sowie solche, die lediglich zu anonymen Statistikzwecken genutzt werden. Sie können selbst entscheiden, welche Kategorien Sie zulassen möchten. Bitte beachten Sie, dass auf Basis Ihrer Einstellungen womöglich nicht mehr alle Funktionalitäten der Seite zur Verfügung stehen. Weitere Informationen finden Sie in unseren Datenschutzhinweisen.",
+		'buttontext_confirm' => "Auswahl bestätigen",
+		'buttontext_accept' => "Alle auswählen",
 		'use_stylesheet' => 1,
 		'is_active' => 0,
 		'multilanguage' => 0,
 		'autolink' => 0,
 		'target_string' => '',
-		'target_page' => 1
+		'target_page' => null,
+		'imprint_page' => null,
+		'cookies_necessary' => "wire|my-domain.de|Der Cookie ist für die sichere Anmeldung und die Erkennung von Spam oder Missbrauch der Webseite erforderlich.|Session\ncmnstr|my-domain.de|Speichert den Zustimmungsstatus des Benutzers für Cookies.|1 Jahr",
+		'cookies_statistics' => "_ga|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren.|2 Jahre\n_gat|Google|Wird von Google Analytics verwendet, um die Anforderungsrate einzuschränken.|1 Tag\n_gid|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren|1 Tag",
+		'introtext_necessary' => 'Notwendige Cookies helfen dabei, eine Webseite nutzbar zu machen, indem sie Grundfunktionen wie Seitennavigation und Zugriff auf sichere Bereiche der Webseite ermöglichen. Die Webseite kann ohne diese Cookies nicht richtig funktionieren.',
+		'introtext_statistics' => 'Statistik-Cookies helfen Webseiten-Besitzern zu verstehen, wie Besucher mit Webseiten interagieren, indem Informationen anonym gesammelt und gemeldet werden.',
+		'ga_property_id' => '',
+		'table_placeholder' => '[[cookie-table]]'
 	);
 
-	public function init() {
-		$this->addHookAfter('Page::render', $this, 'addCookieBanner'); 
-	}
 
-	public function addCookieBanner($event) {
-		if(!$this->is_active) return;
+
+	/*
+	* Module initialization
+	* 	
+	*/	
+	public function init() {
+		if (!$this->is_active) return;
 		
+		if(!isset($_COOKIE['cmnstr'])){
+			$this->addHookAfter('Page::render', $this, 'addCookieBanner');	
+		} else {
+			$cookieValues = json_decode($_COOKIE['cmnstr']);
+			if ($cookieValues->statistics && $this->ga_property_id) $this->addHookAfter('Page::render', $this, 'addTrackingCode');
+		}
+	}
+		
+	
+	
+	/*
+	* addCookieBanner
+	*
+	* Adds cookie banner, scripts and styles 	
+	*/
+	public function addCookieBanner($event) {
 		$page = $event->object; 
 		if($page->template == 'admin') return;
 		
@@ -43,45 +70,183 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
         } else {
             $lang = '';
         }
+			
+		$bodyText = $this->{"bodytext$lang"};
 		
-		if(isset($_COOKIE['cmnstr'])){
-			return;
-		} else {
-			$bodyText = $this->{"bodytext$lang"};
+		if($this->autolink == 1 && $this->{"target_string$lang"} != '' && $this->target_page){
+			$bodyText = str_replace($this->{"target_string$lang"}, '<a href="'.$this->wire('pages')->get($this->target_page)->url.'">'.$this->{"target_string$lang"}.'</a>', $bodyText);
+		}
+		
+		$cookieBanner = '<div class="cmnstr">';
+		$cookieBanner .= '<div class="cmnstr-inner">';
+		$cookieBanner .= '<p class="cmnstr-title">'.$this->{"titletext$lang"}.'</p>';
+		$cookieBanner .= '<div class="cmnstr-body">'.$bodyText.'</div>';
+		$cookieBanner .= '
+						<ul class="cmnstr-options">
+							<li>
+								<input type="checkbox" name="necessary" id="cmnstr_necessary" value="1" checked="checked" disabled>
+								<label for="cmnstr_necessary">'.__("Notwendig").'</label>
+							</li>';
+		if ($this->{"cookies_statistics$lang"}) {
+			$cookieBanner .= '<li>
+								<input type="checkbox" name="statistics" id="cmnstr_statistics" value="1">
+								<label for="cmnstr_statistics">'.__("Statistiken").'</label>
+							</li>';
+		}
+		
+		$cookieBanner .= '	<li><button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext_confirm$lang"}.'</button>';
+		if ($this->{"cookies_statistics$lang"}) {
+			$cookieBanner .= '<button class="cmnstr-button highlight" type="button" onclick="setCookieMonster(true);">'.$this->{"buttontext_accept$lang"}.'</button>';
+		}
+								
+		$cookieBanner .= '</li></ul>';
+		
+		$necCount = count(explode("\n", $this->{"cookies_necessary$lang"}));
+		
+		$cookieBanner .= '<details class="cmnstr-details">
+							<summary>Details</summary>
+							<div class="cmnstr-tabs">	
+								<ul class="cmnstr-tabs-nav">
+									<li><a href="#cmnstr-details-necessary" class="is-active">'.__("Notwendig").' ('.$necCount.')</a></li>';
+		if ($this->{"cookies_statistics$lang"}) {
+			$statCount = count(explode("\n", $this->{"cookies_statistics$lang"}));
+			$cookieBanner .= '<li><a href="#cmnstr-details-statistics">'.__("Statistiken").' ('.$statCount.')</a></li>';
+		}
 			
-			if($this->autolink == 1 && $this->{"target_string$lang"} != '' && $this->target_page){
-				$bodyText = str_replace($this->{"target_string$lang"}, '<a href="'.$this->wire('pages')->get($this->target_page)->url.'">'.$this->{"target_string$lang"}.'</a>', $bodyText);
-			}
-			
-			$cookieBanner = '<div class="cmnstr">';
-			$cookieBanner .= '<div class="cmnstr-body">'.nl2br($bodyText).'</div>';
-			$cookieBanner .= '<button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext$lang"}.'</button>';
+			$cookieBanner .= '</ul>
+								<div class="cmnstr-tabs-container">
+									<div id="cmnstr-details-necessary" class="is-active">
+										<p>'.$this->{"introtext_necessary$lang"}.'</p>';
+			$cookieBanner .= $this->renderCookieTable($this->{"cookies_necessary$lang"});			
 			$cookieBanner .= '</div>';
-			$cookieBanner .= $this->custom_css ? '<style>'.$this->custom_css.'</style>' : '';
-			
-			$output = $event->return;
-			$folder = $this->wire('config')->urls->$this;
-			
-			// inject stylesheet
-			if($this->use_stylesheet){
-				$output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
+									
+			if ($this->{"cookies_statistics$lang"}) {
+				$cookieBanner .= '<div id="cmnstr-details-statistics">
+									<p>'.$this->{"introtext_statistics$lang"}.'</p>';
+				$cookieBanner .= $this->renderCookieTable($this->{"cookies_statistics$lang"});						
+				$cookieBanner .= '</div>';
 			}
+									
+			$cookieBanner .= '</div>
+							</div>
+						</details>';
 			
-			// inject script file
-			$output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
-			
-			$regex = '/(<body[^>]*>)/m';
-			$replace = '$1'.$cookieBanner;
-			
-			$event->return = preg_replace($regex, $replace, $output);	
-		} 
+			if ($this->imprint_page) {
+				$imprintPage = $this->pages->get($this->imprint_page);
+				$cookieBanner .= '<a href="'.$imprintPage->url.'">'.$imprintPage->title.'</a>';
+			}
+						
+		$cookieBanner .= '</div>';
+		$cookieBanner .= '</div>';
+		
+		$output = $event->return;
+		$folder = $this->wire('config')->urls->$this;
+		
+		// inject stylesheet
+		if($this->use_stylesheet){
+			$output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
+		}
+		
+		// inject script file
+		$output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
+		
+		// append cookie banner
+		$regex = '/(<body[^>]*>)/m';
+		$replace = '$1'.$cookieBanner;
+		$event->return = preg_replace($regex, $replace, $output);	
 	}
 	
+	
+	/*
+	* addTrackingCode
+	*
+	* Appends Google Analytics Tracking Code to the <head>-element 	
+	*/
+	public function addTrackingCode($event) {
+		$event->return = str_replace("</head>", $this->renderGATracking()."</head>", $event->return);	
+	}
+	
+	
+	/*
+	* renderCookieTable
+	*
+	* Helper function to render a table view for a given cookie config field
+	*/
+	public function renderCookieTable($cookiefield) {
+		if (!$cookiefield || empty($cookiefield)) return;
+		$rows = explode("\n", $cookiefield);
+		$out = '<table class="cmnstr-table">
+					<thead>
+						<tr><th>'.__("Name").'</th><th>'.__("Anbieter").'</th><th>'.__("Zweck").'</th><th>'.__("Ablauf").'</th></tr>
+					</thead>
+					<tbody>';
+		
+		foreach ($rows as $row) {
+			$columns = explode("|", $row);
+			
+			$out .= '<tr>';
+			foreach ($columns as $column) {
+				$out .= '<td>'.$column.'</td>';
+			}
+			$out .= '</tr>';
+		}
+		$out .= '</tbody></table>';
+		return $out;
+	}
+	
+	
+	/*
+	* renderCookieTable
+	*
+	* Helper function to render Google Analytics Javascript snippet
+	*/
+	public function renderGATracking() {
+		$out = "
+			<script>
+				var gaProperty = '{$this->ga_property_id}';
+				var disableStr = 'ga-disable-' + gaProperty;
+				
+				if (document.cookie.indexOf(disableStr + '=true') > -1) {
+					window[disableStr] = true;
+				}
+				
+				function gaOptout() {
+					document.cookie = disableStr + '=true; expires=Thu, 31 Dec 2099 23:59:59 UTC; path=/';
+					window[disableStr] = true;
+					alert('Die Erfassung von Daten durch Google Analytics wurde deaktiviert.');
+				}
+				
+				(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+				(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+				m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+				})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+				
+				ga('create', '{$this->ga_property_id}', 'auto');
+				ga('require', 'displayfeatures');
+				ga('set', 'anonymizeIp', true);
+				ga('send', 'pageview');
+			</script>
+		";
+		
+		return $out;
+	}
+	
+	
+	/*
+	* getModuleConfigInputfields
+	*
+	* Module Configuration Panel
+	*/
 	public static function getModuleConfigInputfields(array $data) {
 		$data = array_merge(self::$defaults, $data);
 		
 		$fields = new InputfieldWrapper();
 		$modules = wire('modules');
+		
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->label = __('Einstellungen');
+		$fieldset->icon = 'cogs';
+		$fields->add($fieldset);
 		
 		$field = $modules->get('InputfieldCheckbox');
 		$field->label = __('Cookie-Banner aktiviert');
@@ -91,7 +256,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		if($data['is_active'] == 0) $field->attr('checked', '');
 		else $field->attr('checked', 1);	
 		$field->columnWidth = '34';
-		$fields->append($field);
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldCheckbox');
 		$field->label = __('CookieMonster-Stylesheet verwenden');
@@ -101,7 +266,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		if($data['use_stylesheet'] == 0) $field->attr('checked', '');
 		else $field->attr('checked', 1);
 		$field->columnWidth = '33';
-		$fields->append($field);
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldCheckbox');
 		$field->label = __('Mehrsprachigkeit verwenden');
@@ -111,7 +276,30 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		if($data['multilanguage'] == 0) $field->attr('checked', '');
 		else $field->attr('checked', 1);
 		$field->columnWidth = '33';
-		$fields->append($field);
+		$fieldset->append($field);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Platzhalter für Cookie-Übersicht');
+		$field->description = __('Dieser Platzhalter wird beim Seitenaufruf durch die Cookie-Übersicht ersetzt. So kann die die Cookie-Übersicht z.B. in der Datenschtuzerklärung ausgegeben werden.');
+		$field->notes = __('Voraussetzung: der TextformatterCookieTable muss installiert und in der entsprechenden Feldkonfiguration ausgewählt sein.');
+		$field->attr('name', 'table_placeholder');
+		$field->attr('value', $data['table_placeholder']);
+		$field->columnWidth = '100';
+		$fieldset->append($field);
+		
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->label = __('Banner-Text');
+		$fieldset->icon = 'align-left';
+		$fieldset->collapsed = Inputfield::collapsedYes;
+		$fields->add($fieldset);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Banner-Überschrift');
+		$field->attr('name', 'titletext');
+		$field->attr('value', $data['titletext']);
+		$field->columnWidth = '100';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldTextarea');
 		$field->label = __('Banner-Text');
@@ -121,16 +309,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('value', $data['bodytext']);
 		$field->columnWidth = '70';
 		if($data['multilanguage'] == 1) $field->useLanguages = true;
-		$fields->append($field);
-		
-		$field = $modules->get('InputfieldText');
-		$field->label = __('Button-Text');
-		$field->description = __('Beschriftung des Buttons');
-		$field->attr('name', 'buttontext');
-		$field->attr('value', $data['buttontext']);
-		$field->columnWidth = '30';
-		if($data['multilanguage'] == 1) $field->useLanguages = true;
-		$fields->append($field);
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldCheckbox');
 		$field->label = __('Begriff automatisch verlinken');
@@ -139,8 +318,8 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('value', $data['autolink']);
 		if($data['autolink'] == 0) $field->attr('checked', '');
 		else $field->attr('checked', 1);
-		$field->columnWidth = '100';
-		$fields->append($field);
+		$field->columnWidth = '30';
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldText');
 		$field->label = __('Begriff');
@@ -150,7 +329,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->columnWidth = '50';
 		$field->showIf = 'autolink=1';
 		if($data['multilanguage'] == 1) $field->useLanguages = true;
-		$fields->append($field);
+		$fieldset->append($field);
 		
 		$field = $modules->get('InputfieldPageListSelect');
 		$field->label = __('Zielseite');
@@ -159,17 +338,103 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$field->attr('value', $data['target_page']);
 		$field->columnWidth = '50';
 		$field->showIf = 'autolink=1';
-		$fields->append($field);
+		$fieldset->append($field);
+		
+		$field = $modules->get('InputfieldPageListSelect');
+		$field->label = __('Impressum-Seite');
+		$field->attr('name', 'imprint_page');
+		$field->attr('value', $data['imprint_page']);
+		$field->columnWidth = '100';
+		$fieldset->append($field);
+		
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->label = __('Buttons');
+		$fieldset->icon = 'map-signs';
+		$fieldset->collapsed = Inputfield::collapsedYes;
+		$fields->add($fieldset);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Beschriftung Auswahl-Button');
+		$field->description = __('Beschriftung des Buttons, der mit gewählter Einstellung fortfährt');
+		$field->attr('name', 'buttontext_confirm');
+		$field->attr('value', $data['buttontext_confirm']);
+		$field->columnWidth = '50';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$fieldset->append($field);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Beschriftung Auswahl-Button');
+		$field->description = __('Beschriftung des Buttons, der alle Cookies akzeptiert');
+		$field->attr('name', 'buttontext_accept');
+		$field->attr('value', $data['buttontext_accept']);
+		$field->columnWidth = '50';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$fieldset->append($field);
+		
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->label = __('Cookies');
+		$fieldset->icon = 'certificate';
+		$fields->add($fieldset);
+		
+		$necessary = $modules->get('InputfieldFieldset');
+		$necessary->label = __('Notwendig');
+		$necessary->icon = 'fire';
+		$fieldset->add($necessary);
 		
 		$field = $modules->get('InputfieldTextarea');
-		$field->label = __('Eigenes CSS');
-		$field->description = __('Platz für eigenes CSS');
-		$field->notes = __('Die mitgelieferten Styles können hiermit überschrieben werden.');
-		$field->attr('name', 'custom_css');
-		$field->attr('value', $data['custom_css']);
+		$field->label = __('Kurzbeschreibung für notwendige Cookies');
+		$field->attr('name', 'introtext_necessary');
+		$field->attr('value', $data['introtext_necessary']);
 		$field->columnWidth = '100';
-		$field->collapsed = 1;
-		$fields->append($field);
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$necessary->append($field);
+		
+		$field = $modules->get('InputfieldTextarea');
+		$field->label = __('Notwendige Cookies');
+		$field->description = __('Geben Sie hier Informationen zu den notwendigen Cookies in folgendem Format ein');
+		$field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf');
+		$field->attr('name', 'cookies_necessary');
+		$field->attr('value', $data['cookies_necessary']);
+		$field->columnWidth = '100';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$necessary->append($field);
+		
+		$statistics = $modules->get('InputfieldFieldset');
+		$statistics->label = __('Statistik');
+		$statistics->icon = 'signal';
+		$fieldset->add($statistics);
+		
+		$field = $modules->get('InputfieldTextarea');
+		$field->label = __('Kurzbeschreibung für Statistik Cookies');
+		$field->attr('name', 'introtext_statistics');
+		$field->attr('value', $data['introtext_statistics']);
+		$field->columnWidth = '100';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$statistics->append($field);
+		
+		$field = $modules->get('InputfieldTextarea');
+		$field->label = __('Statistik Cookies');
+		$field->description = __('Geben Sie hier Informationen zu den notwendigen Cookies in folgendem Format ein');
+		$field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf');
+		$field->attr('name', 'cookies_statistics');
+		$field->attr('value', $data['cookies_statistics']);
+		$field->columnWidth = '100';
+		if($data['multilanguage'] == 1) $field->useLanguages = true;
+		$statistics->append($field);
+		
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->label = __('Google Analytics');
+		$fieldset->icon = 'google';
+		$fields->add($fieldset);
+		
+		$field = $modules->get('InputfieldText');
+		$field->label = __('Property ID');
+		$field->description = __('Tragen Sie hier Ihre Google Analytics Property-ID ein, um das Tracking zu aktivieren.');
+		$field->notes = __('Format: UA-XXXXXXXX-X');
+		$field->attr('name', 'ga_property_id');
+		$field->attr('value', $data['ga_property_id']);
+		$field->columnWidth = '100';
+		$fieldset->append($field);
 		
 		return $fields;
 	}
