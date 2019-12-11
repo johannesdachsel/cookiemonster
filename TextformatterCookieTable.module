@@ -5,7 +5,7 @@ class TextformatterCookieTable extends Textformatter implements Module{
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'CookieMonster Textformatter', 
-			'version' => 101, 
+			'version' => 102, 
 			'summary' => "Uses a shortcode to render a table with your configured cookies" ,
 			'author' => 'Johannes Dachsel'
 		); 
@@ -13,6 +13,9 @@ class TextformatterCookieTable extends Textformatter implements Module{
 	
 	public function formatValue(Page $page, Field $field, &$str) {
 		$cm = $this->modules->get("CookieMonster");
+		$host = $this->config->httpHost;
+		$hostParts = explode(".", $host);
+		$tld = $hostParts[count($hostParts)-2] . "." . $hostParts[count($hostParts)-1];
 		
 		if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
@@ -31,7 +34,7 @@ class TextformatterCookieTable extends Textformatter implements Module{
 		
 		$output .= "<script>
 						function resetCookie(){
-							document.cookie = 'cmnstr=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.{$this->config->httpHost}';
+							document.cookie = 'cmnstr=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.$tld';
 							location.reload();
 						}
 					</script>";

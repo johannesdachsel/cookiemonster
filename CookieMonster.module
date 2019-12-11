@@ -5,7 +5,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'CookieMonster', 
-			'version' => 202, 
+			'version' => 204, 
 			'summary' => 'Fulfills GDPR madness and renders a cookie banner above your site’s content.',
 			'href' => 'https://github.com/johannesdachsel/cookiemonster',
 			'singular' => true, 
@@ -163,7 +163,11 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	* Appends Google Analytics Tracking Code to the <head>-element 	
 	*/
 	public function addTrackingCode($event) {
-		$event->return = str_replace("</head>", $this->renderGATracking()."</head>", $event->return);	
+		$page = $event->object;
+		
+		if($page->template == 'admin') return;
+		
+		$event->return = str_replace("</head>", $this->renderGATracking($page)."</head>", $event->return);	
 	}
 	
 	
@@ -176,10 +180,13 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		if (!$cookiefield || empty($cookiefield)) return;
 		$rows = explode("\n", $cookiefield);
 		$out = '<table class="cmnstr-table">
-					<thead>
-						<tr><th>'.__("Name").'</th><th>'.__("Anbieter").'</th><th>'.__("Zweck").'</th><th>'.__("Ablauf").'</th></tr>
-					</thead>
-					<tbody>';
+					<thead><tr>';
+		$out .= '<th>'.__("Name").'</th>';
+		$out .= '<th>'.__("Anbieter").'</th>';
+		$out .= '<th>'.__("Zweck").'</th>';
+		$out .= '<th>'.__("Ablauf").'</th>';
+		$out .= '</tr></thead>
+				<tbody>';
 		
 		foreach ($rows as $row) {
 			$columns = explode("|", $row);
@@ -200,7 +207,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	*
 	* Helper function to render Google Analytics Javascript snippet
 	*/
-	public function renderGATracking() {
+	public function renderGATracking($page) {
 		$out = "
 			<script>
 				var gaProperty = '{$this->ga_property_id}';

@@ -47,6 +47,10 @@
 	padding: .25em;
 }
 
+.cmnstr-options label {
+	display: inline;
+}
+
 .cmnstr-options li {
 	margin-right: 1em;
 }
