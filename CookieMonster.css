@@ -47,6 +47,19 @@
 	padding: .25em;
 }
 
+.cmnstr-options input[type=checkbox] {
+	display: inline-block;
+	width: auto;
+	height: auto;
+	border: unset;
+	border-radius: 0;
+	margin: 0;
+	padding: 0;
+	background: unset;
+	-webkit-appearance: checkbox;
+	-webkit-text-fill-color: inherit;
+}
+
 .cmnstr-options label {
 	display: inline;
 }
