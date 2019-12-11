@@ -57,4 +57,6 @@ window.onload = function(){
 			}
 		});
     }
+	var display = document.querySelector(".cmnstr");
+	display.className += " cmnstr-activated";
 }
