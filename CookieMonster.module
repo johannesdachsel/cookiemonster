@@ -150,6 +150,11 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		// inject script file
 		$output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
 		
+		// inject polyfill for IE11 and below
+		if (preg_match('~MSIE|Internet Explorer~i', $_SERVER['HTTP_USER_AGENT']) || (strpos($_SERVER['HTTP_USER_AGENT'], 'Trident/7.0; rv:11.0') !== false)) {
+			$output = str_replace("</head>", "<script src='{$folder}details-polyfill.js'></script></head>", $output);
+		}
+		
 		// append cookie banner
 		$regex = '/(<body[^>]*>)/m';
 		$replace = '$1'.$cookieBanner;
