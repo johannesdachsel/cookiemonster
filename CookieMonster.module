@@ -62,7 +62,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	*/
 	public function addCookieBanner($event) {
 		$page = $event->object; 
-		if($page->template == 'admin') return;
+		if(in_array($page->template, ["admin","form-builder"])) return;
 		
 		if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
