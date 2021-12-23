@@ -226,8 +226,12 @@ class CookieMonsterConfig extends Wire
 
         $field = $modules->get('InputfieldText');
         $field->label = __('Property ID');
-        $field->description = __('Tragen Sie hier Ihre Google Analytics Property-ID ein, um das Tracking zu aktivieren.');
-        $field->notes = __('Format: UA-XXXXXXXX-X');
+        $field->description = __('Tragen Sie hier eine Property-ID ein, um das Tracking zu aktivieren.');
+        $field->notes = __('Erlaubte Formate:  
+         Universal Analytics (UA-XXXXXXXX)  
+         Google Analytics 4 (G-XXXXXXXX)  
+         Google Ads (AW-XXXXXXXX)  
+         Floodlight (DC-XXXXXXXX)');
         $field->attr('name', 'ga_property_id');
         $field->attr('value', $this->data['ga_property_id']);
         $field->columnWidth = '100';

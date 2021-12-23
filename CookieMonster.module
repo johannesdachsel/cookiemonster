@@ -17,9 +17,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 			'installs' => array('TextformatterCookieTable')
 		);
 	}
-	
-
-
 
 
 	/*
@@ -149,14 +146,14 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	/*
 	* addTrackingCode
 	*
-	* Appends Google Analytics Tracking Code to the <head>-element 	
+	* Appends Google Analytics Tracking Code to the <body>-element
 	*/
 	public function addTrackingCode($event) {
 		$page = $event->object;
 		
 		if($page->template == 'admin') return;
 		
-		$event->return = str_replace("</head>", $this->renderGATracking($page)."</head>", $event->return);	
+		$event->return = str_replace("</body>", $this->renderGATracking($page)."</body>", $event->return);
 	}
 	
 	
@@ -197,32 +194,16 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	* Helper function to render Google Analytics Javascript snippet
 	*/
 	public function renderGATracking($page) {
-		$out = "
-			<script>
-				var gaProperty = '{$this->ga_property_id}';
-				var disableStr = 'ga-disable-' + gaProperty;
-				
-				if (document.cookie.indexOf(disableStr + '=true') > -1) {
-					window[disableStr] = true;
-				}
-				
-				function gaOptout() {
-					document.cookie = disableStr + '=true; expires=Thu, 31 Dec 2099 23:59:59 UTC; path=/';
-					window[disableStr] = true;
-					alert('Die Erfassung von Daten durch Google Analytics wurde deaktiviert.');
-				}
-				
-				(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-				(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-				m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-				})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
-				
-				ga('create', '{$this->ga_property_id}', 'auto');
-				ga('require', 'displayfeatures');
-				ga('set', 'anonymizeIp', true);
-				ga('send', 'pageview');
-			</script>
-		";
+		$out = <<<TRACKING
+        <!-- Global Site Tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=$this->ga_property_id"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '$this->ga_property_id');
+        </script>
+TRACKING;
 		
 		return $out;
 	}

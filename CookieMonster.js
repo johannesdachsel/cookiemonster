@@ -23,6 +23,7 @@ function setCookieMonster(setAll){
 	document.cookie = "cmnstr=" + optionString + "; path=/; max-age=31536000; domain=." + host;
 	var cmnstrBanner = document.querySelector(".cmnstr");
 	cmnstrBanner.parentNode.removeChild(cmnstrBanner);
+	location.reload();
 }
 
 function getDomain() {
