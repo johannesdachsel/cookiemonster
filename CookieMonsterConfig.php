@@ -29,7 +29,7 @@ class CookieMonsterConfig extends Wire
     public function __construct(array $data)
     {
         foreach ($this->defaults as $key => $value) {
-            if (!isset($this->data[$key]) || $this->data[$key] == '') $this->data[$key] = $value;
+            if (!isset($data[$key]) || $data[$key] == '') $data[$key] = $value;
         }
 
         $this->data = $data;

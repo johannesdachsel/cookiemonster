@@ -5,17 +5,17 @@ namespace ProcessWire;
 class CookieMonster extends WireData implements Module, ConfigurableModule {
 
 	public static function getModuleInfo() {
-		return array(
+		return [
 			'title' => 'CookieMonster', 
-			'version' => 210,
+			'version' => 220,
 			'summary' => 'Fulfills GDPR madness and renders a cookie banner above your site’s content.',
 			'href' => 'https://github.com/johannesdachsel/cookiemonster',
 			'singular' => true, 
 			'autoload' => true, 
 			'icon' => 'github-alt',
 			'author' => 'Johannes Dachsel',
-			'installs' => array('TextformatterCookieTable')
-		);
+			'installs' => ['TextformatterCookieTable']
+		];
 	}
 
 
@@ -32,6 +32,8 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 			$cookieValues = json_decode($_COOKIE['cmnstr']);
 			if ($cookieValues->statistics && $this->ga_property_id) $this->addHookAfter('Page::render', $this, 'addTrackingCode');
 		}
+
+        // var_dump($this->forms instanceof FormBuilder);
 	}
 		
 	
