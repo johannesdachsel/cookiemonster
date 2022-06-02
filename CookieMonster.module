@@ -31,6 +31,32 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		} else {
 			$cookieValues = json_decode($_COOKIE['cmnstr']);
 			if ($cookieValues->statistics && $this->ga_property_id) $this->addHookAfter('Page::render', $this, 'addTrackingCode');
+
+            if ($cookieValues->external) {
+                $lang = $this->getLang();
+
+                $externalServices = $this->convertToArray($this->{"cookies_external$lang"});
+                $stylesheets = [];
+                $javascripts = [];
+
+                foreach ($externalServices as $key => $externalService) {
+                    $type = array_pop($externalService);
+                    $url = array_pop($externalService);
+                    $externalServices[$key] = $externalService;
+
+                    switch (strtolower($type)) {
+                        case 'script':
+                            $javascripts[] = $url;
+                            break;
+                        case 'stylesheet':
+                            $stylesheets[] = $url;
+                            break;
+                    }
+                }
+
+                $this->renderStylesheets($stylesheets);
+                $this->renderJavascripts($javascripts);
+            }
 		}
 
         // var_dump($this->forms instanceof FormBuilder);
@@ -46,12 +72,15 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	public function addCookieBanner($event) {
 		$page = $event->object; 
 		if(in_array($page->template, ["admin","form-builder"])) return;
-		
-		if($this->wire('languages')) {
-            $userLanguage = $this->wire('user')->language;
-            $lang = $userLanguage->isDefault() ? '' : "__$userLanguage->id";
-        } else {
-            $lang = '';
+
+        $lang = $this->getLang();
+
+        $externalServices = $this->convertToArray($this->{"cookies_external$lang"});
+
+        foreach ($externalServices as $key => $externalService) {
+            $type = array_pop($externalService);
+            $url = array_pop($externalService);
+            $externalServices[$key] = $externalService;
         }
 			
 		$bodyText = $this->{"bodytext$lang"};
@@ -76,9 +105,16 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 								<label for="cmnstr_statistics">'.__("Statistiken").'</label>
 							</li>';
 		}
+
+        if (count($externalServices) > 0) {
+            $cookieBanner .= '<li>
+								<input type="checkbox" name="external" id="cmnstr_external" value="1">
+								<label for="cmnstr_external">'.__("Externe Dienste").'</label>
+							</li>';
+        }
 		
 		$cookieBanner .= '	<li><button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext_confirm$lang"}.'</button>';
-		if ($this->{"cookies_statistics$lang"}) {
+		if ($this->{"cookies_statistics$lang"} || count($externalServices) > 0) {
 			$cookieBanner .= '<button class="cmnstr-button highlight" type="button" onclick="setCookieMonster(true);">'.$this->{"buttontext_accept$lang"}.'</button>';
 		}
 								
@@ -95,6 +131,10 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 			$statCount = count(explode("\n", $this->{"cookies_statistics$lang"}));
 			$cookieBanner .= '<li><a href="#cmnstr-details-statistics">'.__("Statistiken").' ('.$statCount.')</a></li>';
 		}
+
+        if (count($externalServices) > 0) {
+            $cookieBanner .= '<li><a href="#cmnstr-details-external">'.__("Externe Dienste").' (' . count($externalServices) . ')</a></li>';
+        }
 			
 			$cookieBanner .= '</ul>
 								<div class="cmnstr-tabs-container">
@@ -109,6 +149,13 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 				$cookieBanner .= $this->renderCookieTable($this->{"cookies_statistics$lang"});						
 				$cookieBanner .= '</div>';
 			}
+
+            if (count($externalServices) > 0) {
+                $cookieBanner .= '<div id="cmnstr-details-external">
+									<p>'.$this->{"introtext_external$lang"}.'</p>';
+                $cookieBanner .= $this->renderCookieTableArray($externalServices);
+                $cookieBanner .= '</div>';
+            }
 									
 			$cookieBanner .= '</div>
 							</div>
@@ -157,8 +204,18 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		
 		$event->return = str_replace("</body>", $this->renderGATracking($page)."</body>", $event->return);
 	}
-	
-	
+
+    public function convertToArray(string $toConvert): array
+    {
+        if ($toConvert === '') {
+            return [];
+        }
+
+        return array_map(function ($fields) {
+            return explode('|', $fields);
+        }, explode('\n', $toConvert));
+    }
+
 	/*
 	* renderCookieTable
 	*
@@ -188,6 +245,32 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$out .= '</tbody></table>';
 		return $out;
 	}
+
+    public function renderCookieTableArray(array $cookies) {
+        if (count($cookies) <= 0) {
+            return;
+        }
+
+        $out = '<table class="cmnstr-table">
+					<thead><tr>';
+        $out .= '<th>'.__("Name").'</th>';
+        $out .= '<th>'.__("Anbieter").'</th>';
+        $out .= '<th>'.__("Zweck").'</th>';
+        $out .= '<th>'.__("Ablauf").'</th>';
+        $out .= '</tr></thead>
+				<tbody>';
+
+        foreach ($cookies as $row) {
+
+            $out .= '<tr>';
+            foreach ($row as $column) {
+                $out .= '<td>'.$column.'</td>';
+            }
+            $out .= '</tr>';
+        }
+        $out .= '</tbody></table>';
+        return $out;
+    }
 	
 	
 	/*
@@ -209,6 +292,44 @@ TRACKING;
 		
 		return $out;
 	}
+
+    public function renderStylesheets(array $stylesheets): void
+    {
+        $this->addHookAfter('Page::render', function (HookEvent $event) use ($stylesheets) {
+            /** @var Page $page */
+            $page = $event->object;
+
+            if ($page->template === 'admin') {
+                return;
+            }
+
+            $output = '';
+            foreach ($stylesheets as $stylesheet) {
+                $output .= '<link rel="stylesheet" href="' . $stylesheet . '">';
+            }
+
+            $event->return = str_replace('</head>', $output . '</head>', $event->return);
+        });
+    }
+
+    public function renderJavascripts(array $javascripts): void
+    {
+        $this->addHookAfter('Page::render', function (HookEvent $event) use ($javascripts) {
+            /** @var Page $page */
+            $page = $event->object;
+
+            if ($page->template === 'admin') {
+                return;
+            }
+
+            $output = '';
+            foreach ($javascripts as $javascript) {
+                $output .= '<script src="' . $javascript . '">';
+            }
+
+            $event->return = str_replace('</body>', $output . '</body>', $event->return);
+        });
+    }
 	
 	
 	/*
@@ -221,4 +342,15 @@ TRACKING;
         $c = new CookieMonsterConfig($data);
         return $c->getConfig();
 	}
+
+    private function getLang(): string
+    {
+        if ($this->wire('languages')) {
+            $userLanguage = $this->wire('user')->language;
+            $lang = $userLanguage->isDefault() ? '' : "__$userLanguage->id";
+        } else {
+            $lang = '';
+        }
+        return $lang;
+    }
 }

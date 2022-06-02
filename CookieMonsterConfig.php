@@ -219,6 +219,29 @@ class CookieMonsterConfig extends Wire
         if($this->data['multilanguage'] == 1) $field->useLanguages = true;
         $statistics->append($field);
 
+        $external = $modules->get('InputfieldFieldset');
+        $external->label = __('Externe Dienste');
+        $external->icon = 'sitemap';
+        $fieldset->add($external);
+
+        $field = $modules->get('InputfieldTextarea');
+        $field->label = __('Kurzbeschreibung für externe Dienste');
+        $field->attr('name', 'introtext_external');
+        $field->attr('value', $this->data['introtext_external']);
+        $field->columnWidth = '100';
+        if($this->data['multilanguage'] == 1) $field->useLanguages = true;
+        $external->append($field);
+
+        $field = $modules->get('InputfieldTextarea');
+        $field->label = __('Externe Dienste');
+        $field->description = __('Geben Sie hier Informationen zu den externen Diensten in folgendem Format ein');
+        $field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf|Link|Typ(Script/Stylesheet)');
+        $field->attr('name', 'cookies_external');
+        $field->attr('value', $this->data['cookies_external']);
+        $field->columnWidth = '100';
+        if($this->data['multilanguage'] == 1) $field->useLanguages = true;
+        $external->append($field);
+
         $fieldset = $modules->get('InputfieldFieldset');
         $fieldset->label = __('Google Analytics');
         $fieldset->icon = 'google';
