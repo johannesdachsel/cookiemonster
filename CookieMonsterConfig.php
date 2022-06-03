@@ -235,7 +235,7 @@ class CookieMonsterConfig extends Wire
         $field = $modules->get('InputfieldTextarea');
         $field->label = __('Externe Dienste');
         $field->description = __('Geben Sie hier Informationen zu den externen Diensten in folgendem Format ein');
-        $field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf|Link|Typ(Script/Stylesheet)');
+        $field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Link|Typ(Script/Stylesheet)');
         $field->attr('name', 'cookies_external');
         $field->attr('value', $this->data['cookies_external']);
         $field->columnWidth = '100';

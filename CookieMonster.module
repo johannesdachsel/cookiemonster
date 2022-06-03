@@ -205,9 +205,9 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$event->return = str_replace("</body>", $this->renderGATracking($page)."</body>", $event->return);
 	}
 
-    public function convertToArray(string $toConvert): array
+    public function convertToArray(?string $toConvert): array
     {
-        if ($toConvert === '') {
+        if ($toConvert === '' || $toConvert === null) {
             return [];
         }
 
@@ -256,7 +256,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
         $out .= '<th>'.__("Name").'</th>';
         $out .= '<th>'.__("Anbieter").'</th>';
         $out .= '<th>'.__("Zweck").'</th>';
-        $out .= '<th>'.__("Ablauf").'</th>';
         $out .= '</tr></thead>
 				<tbody>';
 
