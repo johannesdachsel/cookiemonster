@@ -23,11 +23,16 @@ class CookieMonsterConfig extends Wire
         'introtext_necessary' => 'Notwendige Cookies helfen dabei, eine Webseite nutzbar zu machen, indem sie Grundfunktionen wie Seitennavigation und Zugriff auf sichere Bereiche der Webseite ermöglichen. Die Webseite kann ohne diese Cookies nicht richtig funktionieren.',
         'introtext_statistics' => 'Statistik-Cookies helfen Webseiten-Besitzern zu verstehen, wie Besucher mit Webseiten interagieren, indem Informationen anonym gesammelt und gemeldet werden.',
         'ga_property_id' => '',
-        'table_placeholder' => '[[cookie-table]]'
+        'table_placeholder' => '[[cookie-table]]',
+        "referrer_policy_header" => "strict-origin-when-cross-origin",
+        "strict_transport_security_header" => 31536000,
+        "x_content_type_options_header" => 0
     );
 
     public function __construct(array $data)
     {
+        $this->wire('config')->scripts->add(wire('config')->urls->CookieMonster.'CookieMonsterConfig.js');
+
         foreach ($this->defaults as $key => $value) {
             if (!isset($data[$key]) || $data[$key] == '') $data[$key] = $value;
         }
@@ -37,13 +42,19 @@ class CookieMonsterConfig extends Wire
 
     public function getConfig()
     {
-        $fields = new InputfieldWrapper();
         $modules = wire('modules');
+        $modules->get("JqueryWireTabs");
+
+        $fields = new InputfieldWrapper();
+
+        $tab = new InputfieldWrapper();
+        $tab->attr("title", "Cookie-Banner");
+        $tab->attr("class", "WireTab");
 
         $fieldset = $modules->get('InputfieldFieldset');
         $fieldset->label = __('Einstellungen');
         $fieldset->icon = 'cogs';
-        $fields->add($fieldset);
+        $tab->add($fieldset);
 
         $field = $modules->get('InputfieldCheckbox');
         $field->label = __('Cookie-Banner aktiviert');
@@ -88,7 +99,7 @@ class CookieMonsterConfig extends Wire
         $fieldset->label = __('Banner-Text');
         $fieldset->icon = 'align-left';
         $fieldset->collapsed = Inputfield::collapsedYes;
-        $fields->add($fieldset);
+        $tab->add($fieldset);
 
         $field = $modules->get('InputfieldText');
         $field->label = __('Banner-Überschrift');
@@ -148,7 +159,7 @@ class CookieMonsterConfig extends Wire
         $fieldset->label = __('Buttons');
         $fieldset->icon = 'map-signs';
         $fieldset->collapsed = Inputfield::collapsedYes;
-        $fields->add($fieldset);
+        $tab->add($fieldset);
 
         $field = $modules->get('InputfieldText');
         $field->label = __('Beschriftung Auswahl-Button');
@@ -171,7 +182,7 @@ class CookieMonsterConfig extends Wire
         $fieldset = $modules->get('InputfieldFieldset');
         $fieldset->label = __('Cookies');
         $fieldset->icon = 'certificate';
-        $fields->add($fieldset);
+        $tab->add($fieldset);
 
         $necessary = $modules->get('InputfieldFieldset');
         $necessary->label = __('Notwendig');
@@ -219,10 +230,17 @@ class CookieMonsterConfig extends Wire
         if($this->data['multilanguage'] == 1) $field->useLanguages = true;
         $statistics->append($field);
 
+        $fields->add($tab);
+
+
+        $tab = new InputfieldWrapper();
+        $tab->attr("title", "Tracking");
+        $tab->attr("class", "WireTab");
+
         $fieldset = $modules->get('InputfieldFieldset');
         $fieldset->label = __('Google Analytics');
         $fieldset->icon = 'google';
-        $fields->add($fieldset);
+        $tab->add($fieldset);
 
         $field = $modules->get('InputfieldText');
         $field->label = __('Property ID');
@@ -235,7 +253,59 @@ class CookieMonsterConfig extends Wire
         $field->attr('name', 'ga_property_id');
         $field->attr('value', $this->data['ga_property_id']);
         $field->columnWidth = '100';
-        $fieldset->append($field);
+
+        $fieldset->add($field);
+        $fields->add($tab);
+
+        $tab = new InputfieldWrapper();
+        $tab->attr("title", "Header");
+        $tab->attr("class", "WireTab");
+
+
+        /** @var InputfieldCheckboxes $field */
+        $field = $modules->get("InputfieldRadios");
+        $field->label = "Referrer-Policy-Header";
+        $field->description = "Der Referrer-Policy-HTTP-Header steuert, wie viele Referrer-Informationen (die mit dem Referer-Header gesendet werden) in Anfragen enthalten sein sollen.";
+        $field->notes = "Nähere Informationen: [Referrer-Policy auf MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy)";
+        $field->addOptions([
+            "no-referrer" => "**no-referrer** ",
+            "no-referrer-when-downgrade" => "no-referrer-when-downgrade",
+            "origin" => "origin",
+            "origin-when-cross-origin" => "origin-when-cross-origin",
+            "same-origin" => "same-origin *(Empfehlung)*",
+            "strict-origin" => "strict-origin",
+            "strict-origin-when-cross-origin" => "strict-origin-when-cross-origin *(Standard)*",
+            "unsafe-url" => "unsafe-url"
+        ]);
+        $field->attr("name+id", "referrer_policy_header");
+        $field->attr("value", $this->data["referrer_policy_header"]);
+        $tab->add($field);
+
+        /** @var InputfieldInteger $field */
+        $field = $modules->get("InputfieldInteger");
+        $field->label = "Strict Transport Security: max-age";
+        $field->description = "Der HTTP Strict-Transport-Security-Antwortheader (oft als HSTS abgekürzt) informiert Browser darüber, dass auf die Website nur über HTTPS zugegriffen werden sollte und dass alle zukünftigen Zugriffsversuche über HTTP automatisch in HTTPS konvertiert werden sollten.";
+        $field->notes = "Nähere Informationen: [Strict-Transport-Security auf MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security)";
+        $field->attr("name+id", "strict_transport_security_header");
+        $field->attr("value", $this->data["strict_transport_security_header"]);
+        $tab->add($field);
+
+        /** @var InputfieldCheckbox $field */
+        $field = $modules->get("InputfieldCheckbox");
+        $field->label = "X-Content-Type-Options";
+        $field->checkboxLabel = "Header auf `nosniff` setzen";
+        $field->description = "Der HTTP Response header X-Content-Type-Options ist eine Markierung, die vom Server verwendet wird, um anzuzeigen, dass die in den Content-Type-Headern angekündigten MIME-Typen befolgt und nicht geändert werden sollten. Der Header ermöglicht es Ihnen, MIME-Typ-Sniffing zu vermeiden, indem Sie sagen, dass die MIME-Typen absichtlich konfiguriert sind. Website-Sicherheitstester erwarten normalerweise, dass dieser Header gesetzt wird.";
+        $field->notes = "Nähere Informationen: [X-Content-Type-Options auf MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options)";
+        $field->name = "x_content_type_options_header";
+        $field->attr('value', $this->data['x_content_type_options_header']);
+        if($this->data['x_content_type_options_header'] == 0) $field->attr('checked', '');
+        else $field->attr('checked', 1);
+        $tab->add($field);
+
+        $fields->add($tab);
+
+
+
 
         return $fields;
     }

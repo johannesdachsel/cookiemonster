@@ -18,22 +18,31 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		];
 	}
 
+    public $allowTracking = false;
+
 
 	/*
 	* Module initialization
 	* 	
 	*/	
 	public function init() {
+        $this->addHookAfter("Page::render", $this, "sendHeaders");
+
 		if (!$this->is_active) return;
 		
-		if(!isset($_COOKIE['cmnstr'])){
-			$this->addHookAfter('Page::render', $this, 'addCookieBanner');	
-		} else {
-			$cookieValues = json_decode($_COOKIE['cmnstr']);
-			if ($cookieValues->statistics && $this->ga_property_id) $this->addHookAfter('Page::render', $this, 'addTrackingCode');
+		if (!isset($_COOKIE['cmnstr'])) {
+			$this->addHookAfter('Page::render', $this, 'addCookieBanner');
+            return;
 		}
 
-        // var_dump($this->forms instanceof FormBuilder);
+        $cookieValues = json_decode($_COOKIE['cmnstr']);
+        if ($cookieValues->statistics) {
+            $this->allowTracking = true;
+        }
+
+        if ($this->allowTracking && $this->ga_property_id) {
+            $this->addHookAfter('Page::render', $this, 'addTrackingCode');
+        }
 	}
 		
 	
@@ -45,7 +54,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	*/
 	public function addCookieBanner($event) {
 		$page = $event->object; 
-		if(in_array($page->template, ["admin","form-builder"])) return;
+		if (in_array($page->template, ["admin","form-builder"])) return;
 		
 		if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
@@ -152,10 +161,10 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	*/
 	public function addTrackingCode($event) {
 		$page = $event->object;
+
+        if (in_array($page->template, ["admin","form-builder"])) return;
 		
-		if($page->template == 'admin') return;
-		
-		$event->return = str_replace("</body>", $this->renderGATracking($page)."</body>", $event->return);
+		$event->return = str_replace("</body>", $this->renderGATracking()."</body>", $event->return);
 	}
 	
 	
@@ -195,7 +204,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 	*
 	* Helper function to render Google Analytics Javascript snippet
 	*/
-	public function renderGATracking($page) {
+	public function renderGATracking() {
 		$out = <<<TRACKING
         <!-- Global Site Tag (gtag.js) - Google Analytics -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=$this->ga_property_id"></script>
@@ -209,6 +218,17 @@ TRACKING;
 		
 		return $out;
 	}
+
+
+    public function sendHeaders(HookEvent $event)
+    {
+        header("Referrer-Policy: " . $this->referrer_policy_header);
+        header("Strict-Transport-Security: max-age=" . $this->strict_transport_security_header);
+
+        if ($this->x_content_type_options_header == 1) {
+            header("X-Content-Type-Options: nosniff");
+        }
+    }
 	
 	
 	/*
