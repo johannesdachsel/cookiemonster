@@ -268,7 +268,7 @@ class CookieMonsterConfig extends Wire
         $field->description = "Der Referrer-Policy-HTTP-Header steuert, wie viele Referrer-Informationen (die mit dem Referer-Header gesendet werden) in Anfragen enthalten sein sollen.";
         $field->notes = "Nähere Informationen: [Referrer-Policy auf MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy)";
         $field->addOptions([
-            "no-referrer" => "**no-referrer** ",
+            "no-referrer" => "no-referrer",
             "no-referrer-when-downgrade" => "no-referrer-when-downgrade",
             "origin" => "origin",
             "origin-when-cross-origin" => "origin-when-cross-origin",
