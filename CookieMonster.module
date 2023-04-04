@@ -36,7 +36,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		}
 
         $cookieValues = json_decode($_COOKIE['cmnstr']);
-        if ($cookieValues->statistics) {
+        if (property_exists($cookieValues, "statistics") && $cookieValues->statistics) {
             $this->allowTracking = true;
         }
 
