@@ -164,7 +164,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 
         if (in_array($page->template, ["admin","form-builder"])) return;
 		
-		$event->return = str_replace("</body>", $this->renderGATracking()."</body>", $event->return);
+		$event->return = str_replace("</body>", $this->renderGTM()."</body>", $event->return);
 	}
 	
 	
@@ -197,28 +197,91 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$out .= '</tbody></table>';
 		return $out;
 	}
-	
-	
-	/*
-	* renderCookieTable
-	*
-	* Helper function to render Google Analytics Javascript snippet
-	*/
-	public function renderGATracking() {
-		$out = <<<TRACKING
-        <!-- Global Site Tag (gtag.js) - Google Analytics -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=$this->ga_property_id"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '$this->ga_property_id');
-        </script>
-TRACKING;
-		
-		return $out;
-	}
 
+    /**
+     * Helper function to render the Google Tag Manager container snippet
+     */
+    public function renderGTM() {
+        $id = $this->ga_property_id;
+        if (!$id || strpos($id, 'GTM-') !== 0) return '';
+
+        $out = <<<GTM
+<!-- Google Tag Manager: Consent Mode v2 -->
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+
+// Step 1: Set default denied
+gtag('consent', 'default', {
+  'analytics_storage': 'denied',
+  'ad_storage': 'denied',
+  'ad_personalization': 'denied',
+  'ad_user_data': 'denied',
+  'security_storage': 'granted'
+});
+</script>
+
+<!-- Step 2: Load GTM -->
+<script>
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer', '$id');
+</script>
+
+<!-- Step 3: Update consent from stored cookie -->
+<script>
+(function () {
+    function getCookie(name) {
+        const value = '; ' + document.cookie;
+        const parts = value.split('; ' + name + '=');
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    function getConsentCategories() {
+        try {
+            const raw = getCookie('cmnstr');
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            return {};
+        }
+    }
+    const categoryMap = {
+        'necessary': ['security_storage'],
+        'statistics': ['analytics_storage','ad_storage','ad_personalization','ad_user_data'],
+    };
+    const consented = getConsentCategories();
+    if (Object.keys(consented).length > 0) {
+        let updatedConsent = {
+            ad_storage: 'denied',
+            analytics_storage: 'denied',
+            ad_user_data: 'denied',
+            ad_personalization: 'denied',
+            security_storage: 'granted'
+        };
+        for (const cat in consented) {
+            if (consented[cat] && categoryMap[cat]) {
+                categoryMap[cat].forEach(function(gtagKey) {
+                    updatedConsent[gtagKey] = 'granted';
+                });
+            }
+        }
+        if (window.gtag) {
+            gtag('consent', 'update', updatedConsent);
+        }
+    }
+})();
+</script>
+
+<!-- GTM Fallback -->
+<noscript>
+<iframe src="https://www.googletagmanager.com/ns.html?id=$id"
+height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+GTM;
+
+        return $out;
+    }
 
     public function sendHeaders(HookEvent $event)
     {
