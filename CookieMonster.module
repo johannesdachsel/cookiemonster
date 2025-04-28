@@ -163,16 +163,61 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
 		$page = $event->object;
 
         if (in_array($page->template, ["admin","form-builder"])) return;
-		
-		$event->return = str_replace("</body>", $this->renderGTM()."</body>", $event->return);
-	}
-	
-	
-	/*
-	* renderCookieTable
-	*
-	* Helper function to render a table view for a given cookie config field
-	*/
+
+        if (strpos($this->ga_property_id, 'GTM-') === 0) {
+            $event->return = str_replace(
+                '</body>',
+                $this->renderGTM() . '</body>',
+                $event->return
+            );
+        } else {
+            $event->return = str_replace(
+                '</body>',
+                $this->renderGATracking() . '</body>',
+                $event->return
+            );
+        }
+
+    }
+
+    /*
+    * renderCookieTable
+    *
+    * Helper function to render Google Analytics Javascript snippet
+    */
+    public function renderGATracking() {
+        $out = <<<TRACKING
+    <!-- Global Site Tag (gtag.js) - Google Analytics with Consent Mode v2 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={$this->ga_property_id}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        
+        // Consent Mode v2 - full consent granted
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'analytics_storage': 'granted',
+            'functionality_storage': 'granted',
+            'personalization_storage': 'granted',
+            'security_storage': 'granted'
+        });
+        
+        gtag('js', new Date());
+        
+        gtag('config', '{$this->ga_property_id}');
+    </script>
+TRACKING;
+
+        return $out;
+    }
+
+
+
+    /*
+    * renderCookieTable
+    *
+    * Helper function to render a table view for a given cookie config field
+    */
 	public function renderCookieTable($cookiefield) {
 		if (!$cookiefield || empty($cookiefield)) return;
 		$rows = explode("\n", $cookiefield);
@@ -217,6 +262,7 @@ gtag('consent', 'default', {
   'ad_storage': 'denied',
   'ad_personalization': 'denied',
   'ad_user_data': 'denied',
+  'functionality_storage ' : 'denied',
   'security_storage': 'granted'
 });
 </script>
@@ -248,7 +294,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     }
     const categoryMap = {
         'necessary': ['security_storage'],
-        'statistics': ['analytics_storage','ad_storage','ad_personalization','ad_user_data'],
+        'statistics': ['analytics_storage','ad_storage','ad_personalization','ad_user_data','functionality_storage '],
     };
     const consented = getConsentCategories();
     if (Object.keys(consented).length > 0) {
@@ -257,6 +303,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             analytics_storage: 'denied',
             ad_user_data: 'denied',
             ad_personalization: 'denied',
+            functionality_storage: 'denied',
             security_storage: 'granted'
         };
         for (const cat in consented) {
@@ -268,6 +315,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
         if (window.gtag) {
             gtag('consent', 'update', updatedConsent);
+            window.dataLayer.push({event: 'consent_updated'});
         }
     }
 })();
