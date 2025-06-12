@@ -2,167 +2,268 @@
 
 namespace ProcessWire;
 
-class CookieMonster extends WireData implements Module, ConfigurableModule {
+class CookieMonster extends WireData implements Module, ConfigurableModule
+{
 
-	public static function getModuleInfo() {
-		return [
-			'title' => 'CookieMonster', 
-			'version' => 230,
-			'summary' => 'Add a cookie banner, integrate tracking and send relevant headers.',
-			'href' => 'https://github.com/johannesdachsel/cookiemonster',
-			'singular' => true, 
-			'autoload' => true, 
-			'icon' => 'github-alt',
-			'author' => 'Johannes Dachsel',
-			'installs' => ['TextformatterCookieTable']
-		];
-	}
+    public static function getModuleInfo()
+    {
+        return [
+            'title' => 'CookieMonster',
+            'version' => 240,
+            'summary' => 'Add a cookie banner, integrate tracking and send relevant headers.',
+            'href' => 'https://github.com/johannesdachsel/cookiemonster',
+            'singular' => true,
+            'autoload' => true,
+            'icon' => 'github-alt',
+            'author' => 'Johannes Dachsel',
+            'installs' => ['TextformatterCookieTable']
+        ];
+    }
 
     public $allowTracking = false;
 
 
-	/*
-	* Module initialization
-	* 	
-	*/	
-	public function init() {
+    /*
+    * Module initialization
+    *
+    */
+    public function init()
+    {
+        if(!wire('user')->isSuperuser()) return;
+
         $this->addHookAfter("Page::render", $this, "sendHeaders");
 
-		if (!$this->is_active) return;
-		
-		if (!isset($_COOKIE['cmnstr'])) {
-			$this->addHookAfter('Page::render', $this, 'addCookieBanner');
+        $this->wire->addHook('/cookie-monster/pages-json', function(HookEvent $event) {
+            $result = [];
+            $home = wire('pages')->get(1);
+            $result[] = [
+                'id'    => $home->id,
+                'title' => $home->title,
+                'path'  => '',
+                'level' => 1
+            ];
+            $addPage = function($page, $level) use (&$addPage, &$result) {
+                foreach($page->children("template!=admin|trash") as $child) {
+                    $result[] = [
+                        'id'    => $child->id,
+                        'title' => $child->title,
+                        'path'  => trim($child->path, '/'),
+                        'level' => $level
+                    ];
+                    $addPage($child, $level + 1);
+                }
+            };
+            $addPage($home, 2);
+            header('Content-Type: application/json');
+            return json_encode($result);
+        });
+
+        $this->addHookProperty('Page::cookieMonsterPagesJson', $this, 'renderPagesJson');
+
+        if (!$this->is_active) return;
+
+        if (!isset($_COOKIE['cmnstr'])) {
+            $this->addHookAfter('Page::render', $this, 'addCookieBanner');
             return;
-		}
+        }
 
         $cookieValues = json_decode($_COOKIE['cmnstr']);
+
         if (property_exists($cookieValues, "statistics") && $cookieValues->statistics) {
             $this->allowTracking = true;
+        }
+
+        if (property_exists($cookieValues, "ads") && $cookieValues->ads) {
+            $this->allowAds = true;
         }
 
         if ($this->allowTracking && $this->ga_property_id) {
             $this->addHookAfter('Page::render', $this, 'addTrackingCode');
         }
-	}
-		
-	
-	
-	/*
-	* addCookieBanner
-	*
-	* Adds cookie banner, scripts and styles 	
-	*/
-	public function addCookieBanner($event) {
-		$page = $event->object; 
-		if (in_array($page->template, ["admin","form-builder"])) return;
-		
-		if($this->wire('languages')) {
+
+        if ($this->allowAds) {
+            $this->addHookAfter('Page::render', $this, 'addGoogleAdsConversions');
+        }
+    }
+
+    public function renderPagesJson(HookEvent $event)
+    {
+        if (!$this->wire()->user->isSuperuser()) {
+            throw new WirePermissionException("Permission denied");
+        }
+
+        $out = [];
+        $pages = $this->wire()->pages->find("template!=admin, include=all");
+
+        foreach ($pages as $p) {
+            $out[] = [
+                'id' => $p->id,
+                'title' => $p->title . " (/" . $p->name . ")"
+            ];
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode($out);
+        $event->replace = true;
+    }
+
+    /*
+    * addCookieBanner
+    *
+    * Adds cookie banner, scripts and styles
+    */
+    public function addCookieBanner($event)
+    {
+        $page = $event->object;
+        if (in_array($page->template, ["admin", "form-builder"])) return;
+
+        if ($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
             $lang = $userLanguage->isDefault() ? '' : "__$userLanguage->id";
         } else {
             $lang = '';
         }
-			
-		$bodyText = $this->{"bodytext$lang"};
-		
-		if($this->autolink == 1 && $this->{"target_string$lang"} != '' && $this->target_page){
-			$bodyText = str_replace($this->{"target_string$lang"}, '<a href="'.$this->wire('pages')->get($this->target_page)->url.'">'.$this->{"target_string$lang"}.'</a>', $bodyText);
-		}
-		
-		$cookieBanner = '<div class="cmnstr">';
-		$cookieBanner .= '<div class="cmnstr-inner">';
-		$cookieBanner .= '<p class="cmnstr-title">'.$this->{"titletext$lang"}.'</p>';
-		$cookieBanner .= '<div class="cmnstr-body">'.$bodyText.'</div>';
-		$cookieBanner .= '
+
+        $bodyText = $this->{"bodytext$lang"};
+
+        if ($this->autolink == 1 && $this->{"target_string$lang"} != '' && $this->target_page) {
+            $bodyText = str_replace($this->{"target_string$lang"}, '<a href="' . $this->wire('pages')->get($this->target_page)->url . '">' . $this->{"target_string$lang"} . '</a>', $bodyText);
+        }
+
+        $cookieBanner = '<div class="cmnstr">';
+        $cookieBanner .= '<div class="cmnstr-inner">';
+        $cookieBanner .= '<p class="cmnstr-title">' . $this->{"titletext$lang"} . '</p>';
+        $cookieBanner .= '<div class="cmnstr-body">' . $bodyText . '</div>';
+        $cookieBanner .= '
 						<ul class="cmnstr-options">
 							<li>
 								<input type="checkbox" name="necessary" id="cmnstr_necessary" value="1" checked="checked" disabled>
-								<label for="cmnstr_necessary">'.__("Notwendig").'</label>
+								<label for="cmnstr_necessary">' . __("Notwendig") . '</label>
 							</li>';
-		if ($this->{"cookies_statistics$lang"}) {
-			$cookieBanner .= '<li>
+        if ($this->{"cookies_statistics$lang"}) {
+            $cookieBanner .= '<li>
 								<input type="checkbox" name="statistics" id="cmnstr_statistics" value="1">
-								<label for="cmnstr_statistics">'.__("Statistiken").'</label>
+								<label for="cmnstr_statistics">' . __("Statistiken") . '</label>
 							</li>';
-		}
-		
-		$cookieBanner .= '	<li><button class="cmnstr-button" type="button" onclick="setCookieMonster();">'.$this->{"buttontext_confirm$lang"}.'</button>';
-		if ($this->{"cookies_statistics$lang"}) {
-			$cookieBanner .= '<button class="cmnstr-button highlight" type="button" onclick="setCookieMonster(true);">'.$this->{"buttontext_accept$lang"}.'</button>';
-		}
-								
-		$cookieBanner .= '</li></ul>';
-		
-		$necCount = count(explode("\n", $this->{"cookies_necessary$lang"}));
-		
-		$cookieBanner .= '<details class="cmnstr-details">
+        }
+        if ($this->{"introtext_ads$lang"}) {
+            $cookieBanner .= "<li>
+                                <input type='checkbox' name='ads' id='cmnstr_marketing' value='1' >
+                                <label for='cmnstr_marketing'>" . __("Werbung") . "</label>
+                            </li>";
+        }
+
+        $cookieBanner .= '	<li><button class="cmnstr-button" type="button" onclick="setCookieMonster();">' . $this->{"buttontext_confirm$lang"} . '</button>';
+        if ($this->{"cookies_statistics$lang"}) {
+            $cookieBanner .= '<button class="cmnstr-button highlight" type="button" onclick="setCookieMonster(true);">' . $this->{"buttontext_accept$lang"} . '</button>';
+        }
+
+        $cookieBanner .= '</li></ul>';
+
+        $necCount = count(explode("\n", $this->{"cookies_necessary$lang"}));
+
+        $cookieBanner .= '<details class="cmnstr-details">
 							<summary>Details</summary>
 							<div class="cmnstr-tabs">	
 								<ul class="cmnstr-tabs-nav">
-									<li><a href="#cmnstr-details-necessary" class="is-active">'.__("Notwendig").' ('.$necCount.')</a></li>';
-		if ($this->{"cookies_statistics$lang"}) {
-			$statCount = count(explode("\n", $this->{"cookies_statistics$lang"}));
-			$cookieBanner .= '<li><a href="#cmnstr-details-statistics">'.__("Statistiken").' ('.$statCount.')</a></li>';
-		}
-			
-			$cookieBanner .= '</ul>
+									<li><a href="#cmnstr-details-necessary" class="is-active">' . __("Notwendig") . ' (' . $necCount . ')</a></li>';
+        if ($this->{"cookies_statistics$lang"}) {
+            $statCount = count(explode("\n", $this->{"cookies_statistics$lang"}));
+            $cookieBanner .= '<li><a href="#cmnstr-details-statistics">' . __("Statistiken") . ' (' . $statCount . ')</a></li>';
+        }
+
+        $cookieBanner .= '</ul>
 								<div class="cmnstr-tabs-container">
 									<div id="cmnstr-details-necessary" class="is-active">
-										<p>'.$this->{"introtext_necessary$lang"}.'</p>';
-			$cookieBanner .= $this->renderCookieTable($this->{"cookies_necessary$lang"});			
-			$cookieBanner .= '</div>';
-									
-			if ($this->{"cookies_statistics$lang"}) {
-				$cookieBanner .= '<div id="cmnstr-details-statistics">
-									<p>'.$this->{"introtext_statistics$lang"}.'</p>';
-				$cookieBanner .= $this->renderCookieTable($this->{"cookies_statistics$lang"});						
-				$cookieBanner .= '</div>';
-			}
-									
-			$cookieBanner .= '</div>
+										<p>' . $this->{"introtext_necessary$lang"} . '</p>';
+        $cookieBanner .= $this->renderCookieTable($this->{"cookies_necessary$lang"});
+        $cookieBanner .= '</div>';
+
+        if ($this->{"cookies_statistics$lang"}) {
+            $cookieBanner .= '<div id="cmnstr-details-statistics">
+									<p>' . $this->{"introtext_statistics$lang"} . '</p>';
+            $cookieBanner .= $this->renderCookieTable($this->{"cookies_statistics$lang"});
+            $cookieBanner .= '</div>';
+        }
+
+        $cookieBanner .= '</div>
 							</div>
 						</details>';
-			
-			if ($this->imprint_page) {
-				$imprintPage = $this->pages->get($this->imprint_page);
-				$cookieBanner .= '<a href="'.$imprintPage->url.'">'.$imprintPage->title.'</a>';
-			}
-						
-		$cookieBanner .= '</div>';
-		$cookieBanner .= '</div>';
-		
-		$output = $event->return;
-		$folder = $this->wire('config')->urls->$this;
-		
-		// inject stylesheet
-		if($this->use_stylesheet){
-			$output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
-		}
-		
-		// inject script file
-		$output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
-		
-		// inject polyfill for IE11 and below
-		if (preg_match('~MSIE|Internet Explorer~i', $_SERVER['HTTP_USER_AGENT']) || (strpos($_SERVER['HTTP_USER_AGENT'], 'Trident/7.0; rv:11.0') !== false)) {
-			$output = str_replace("</head>", "<script src='{$folder}details-polyfill.js'></script></head>", $output);
-		}
-		
-		// append cookie banner
-		$regex = '/(<body[^>]*>)/m';
-		$replace = '$1'.$cookieBanner;
-		$event->return = preg_replace($regex, $replace, $output);	
-	}
-	
-	
-	/*
-	* addTrackingCode
-	*
-	* Appends Google Analytics Tracking Code to the <body>-element
-	*/
-	public function addTrackingCode($event) {
-		$page = $event->object;
 
-        if (in_array($page->template, ["admin","form-builder"])) return;
+        if ($this->imprint_page) {
+            $imprintPage = $this->pages->get($this->imprint_page);
+            $cookieBanner .= '<a href="' . $imprintPage->url . '">' . $imprintPage->title . '</a>';
+        }
+
+        $cookieBanner .= '</div>';
+        $cookieBanner .= '</div>';
+
+        $output = $event->return;
+        $folder = $this->wire('config')->urls->$this;
+
+        // inject stylesheet
+        if ($this->use_stylesheet) {
+            $output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
+        }
+
+        // inject script file
+        $output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
+
+        // inject polyfill for IE11 and below
+        if (preg_match('~MSIE|Internet Explorer~i', $_SERVER['HTTP_USER_AGENT']) || (strpos($_SERVER['HTTP_USER_AGENT'], 'Trident/7.0; rv:11.0') !== false)) {
+            $output = str_replace("</head>", "<script src='{$folder}details-polyfill.js'></script></head>", $output);
+        }
+
+        // append cookie banner
+        $regex = '/(<body[^>]*>)/m';
+        $replace = '$1' . $cookieBanner;
+        $event->return = preg_replace($regex, $replace, $output);
+    }
+
+    public function addGoogleAdsConversions(HookEvent $event) {
+        static $injected = false;
+        if ($injected) return;
+        $injected = true;
+
+        $output  = $event->return;
+        $convs   = json_decode($this->data['google_ads_conversions'] ?? '[]', true);
+        if (empty($convs)) return;
+        $pageId  = (int) $this->wire('page')->id;
+        $scripts = '';
+        $fired   = [];
+
+        foreach ($convs as $conv) {
+            if (empty($conv['active']) || !in_array($pageId, $conv['pages'] ?? [])) continue;
+            $id    = trim($conv['id']);
+            $label = trim($conv['label']);
+            if (!$id || !$label) continue;
+            $key = "{$id}/{$label}";
+            if (in_array($key, $fired)) continue;
+            $fired[] = $key;
+            $scripts .= "<script>
+window.addEventListener('load', function() {
+  if (typeof gtag === 'function') {
+    gtag('event','conversion',{send_to:'AW-{$id}/{$label}'});
+  }
+});
+</script>\n";
+        }
+
+        if ($scripts) {
+            $event->return = preg_replace('/<\/head>/', $scripts . '</head>', $output, 1);
+        }
+    }
+
+    /*
+    * addTrackingCode
+    *
+    * Appends Google Analytics Tracking Code to the <body>-element
+    */
+    public function addTrackingCode($event)
+    {
+        $page = $event->object;
+
+        if (in_array($page->template, ["admin", "form-builder"])) return;
 
         if (strpos($this->ga_property_id, 'GTM-') === 0) {
             $event->return = str_replace(
@@ -185,22 +286,29 @@ class CookieMonster extends WireData implements Module, ConfigurableModule {
     *
     * Helper function to render Google Analytics Javascript snippet
     */
-    public function renderGATracking() {
+    public function renderGATracking()
+    {
         $out = <<<TRACKING
-    <!-- Global Site Tag (gtag.js) - Google Analytics with Consent Mode v2 -->
+    <!-- Global Site Tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={$this->ga_property_id}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         
-        // Consent Mode v2 - full consent granted
+        <!-- Tag should not ever fire if not accepted @ banner but just in case set consent appropriately -->
         gtag('consent', 'default', {
-            'ad_storage': 'granted',
-            'analytics_storage': 'granted',
-            'functionality_storage': 'granted',
-            'personalization_storage': 'granted',
-            'security_storage': 'granted'
-        });
+              'analytics_storage': 'denied',
+              'ad_storage': 'denied',
+              'ad_personalization': 'denied',
+              'ad_user_data': 'denied',
+              'functionality_storage': 'denied',
+              'security_storage': 'granted'
+            });
+        
+        gtag('consent', 'update', {
+             'ad_storage': $this->allowAds ? 'granted' : 'denied',
+             'analytics_storage': $this->allowTracking ? 'granted' : 'denied',
+        })
         
         gtag('js', new Date());
         
@@ -211,63 +319,61 @@ TRACKING;
         return $out;
     }
 
-
-
     /*
     * renderCookieTable
     *
     * Helper function to render a table view for a given cookie config field
     */
-	public function renderCookieTable($cookiefield) {
-		if (!$cookiefield || empty($cookiefield)) return;
-		$rows = explode("\n", $cookiefield);
-		$out = '<table class="cmnstr-table">
+    public function renderCookieTable($cookiefield)
+    {
+        if (!$cookiefield || empty($cookiefield)) return;
+        $rows = explode("\n", $cookiefield);
+        $out = '<table class="cmnstr-table">
 					<thead><tr>';
-		$out .= '<th>'.__("Name").'</th>';
-		$out .= '<th>'.__("Anbieter").'</th>';
-		$out .= '<th>'.__("Zweck").'</th>';
-		$out .= '<th>'.__("Ablauf").'</th>';
-		$out .= '</tr></thead>
+        $out .= '<th>' . __("Name") . '</th>';
+        $out .= '<th>' . __("Anbieter") . '</th>';
+        $out .= '<th>' . __("Zweck") . '</th>';
+        $out .= '<th>' . __("Ablauf") . '</th>';
+        $out .= '</tr></thead>
 				<tbody>';
-		
-		foreach ($rows as $row) {
-			$columns = explode("|", $row);
-			
-			$out .= '<tr>';
-			foreach ($columns as $column) {
-				$out .= '<td>'.$column.'</td>';
-			}
-			$out .= '</tr>';
-		}
-		$out .= '</tbody></table>';
-		return $out;
-	}
+
+        foreach ($rows as $row) {
+            $columns = explode("|", $row);
+
+            $out .= '<tr>';
+            foreach ($columns as $column) {
+                $out .= '<td>' . $column . '</td>';
+            }
+            $out .= '</tr>';
+        }
+        $out .= '</tbody></table>';
+        return $out;
+    }
 
     /**
      * Helper function to render the Google Tag Manager container snippet
      */
-    public function renderGTM() {
+    public function renderGTM()
+    {
         $id = $this->ga_property_id;
         if (!$id || strpos($id, 'GTM-') !== 0) return '';
 
         $out = <<<GTM
-<!-- Google Tag Manager: Consent Mode v2 -->
+<!-- Google Tag Manager -->
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 
-// Step 1: Set default denied
 gtag('consent', 'default', {
   'analytics_storage': 'denied',
   'ad_storage': 'denied',
   'ad_personalization': 'denied',
   'ad_user_data': 'denied',
-  'functionality_storage ' : 'denied',
+  'functionality_storage': 'denied',
   'security_storage': 'granted'
 });
 </script>
 
-<!-- Step 2: Load GTM -->
 <script>
 (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -276,7 +382,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer', '$id');
 </script>
 
-<!-- Step 3: Update consent from stored cookie -->
 <script>
 (function () {
     function getCookie(name) {
@@ -294,7 +399,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     }
     const categoryMap = {
         'necessary': ['security_storage'],
-        'statistics': ['analytics_storage','ad_storage','ad_personalization','ad_user_data','functionality_storage '],
+        'statistics': ['analytics_storage','ad_storage','ad_personalization','ad_user_data','functionality_storage'],
     };
     const consented = getConsentCategories();
     if (Object.keys(consented).length > 0) {
@@ -340,16 +445,29 @@ GTM;
             header("X-Content-Type-Options: nosniff");
         }
     }
-	
-	
-	/*
-	* getModuleConfigInputfields
-	*
-	* Module Configuration Panel
-	*/
-	public static function getModuleConfigInputfields(array $data) {
+
+    /*
+    * getModuleConfigInputfields
+    *
+    * Module Configuration Panel
+    */
+    public static function getModuleConfigInputfields(array $data)
+    {
         require_once(__DIR__ . '/CookieMonsterConfig.php');
         $c = new CookieMonsterConfig($data);
         return $c->getConfig();
-	}
+    }
+
+    public function ___saveConfig($data) {
+        if (isset($data['google_ads_conversions']) && is_string($data['google_ads_conversions'])) {
+            $json = json_decode($data['google_ads_conversions'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $data['google_ads_conversions'] = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            } else {
+                $data['google_ads_conversions'] = '[]';
+            }
+        }
+        return $data;
+    }
+
 }
