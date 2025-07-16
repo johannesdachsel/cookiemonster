@@ -301,7 +301,7 @@ button.remove-conversion {
 }
 
 .select2-container--default .select2-results__option--highlighted {
-	background: currentColor !important;
+	background: grey !important;
 	color: inherit !important;
 }
 
