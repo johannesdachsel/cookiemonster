@@ -22,6 +22,7 @@ class CookieMonsterConfig extends Wire
         'cookies_statistics' => "_ga|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren.|2 Jahre\n_gat|Google|Wird von Google Analytics verwendet, um die Anforderungsrate einzuschränken.|1 Tag\n_gid|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren|1 Tag",
         'introtext_necessary' => 'Notwendige Cookies helfen dabei, eine Webseite nutzbar zu machen, indem sie Grundfunktionen wie Seitennavigation und Zugriff auf sichere Bereiche der Webseite ermöglichen. Die Webseite kann ohne diese Cookies nicht richtig funktionieren.',
         'introtext_statistics' => 'Statistik-Cookies helfen Webseiten-Besitzern zu verstehen, wie Besucher mit Webseiten interagieren, indem Informationen anonym gesammelt und gemeldet werden.',
+        'introtext_ads' => 'Wir verwenden Cookies von Drittanbietern, um Ihnen personalisierte Werbung anzuzeigen.',
         'ga_property_id' => '',
         'table_placeholder' => '[[cookie-table]]',
         "referrer_policy_header" => "strict-origin-when-cross-origin",
@@ -32,9 +33,16 @@ class CookieMonsterConfig extends Wire
     public function __construct(array $data)
     {
         $this->wire('config')->scripts->add(wire('config')->urls->CookieMonster.'CookieMonsterConfig.js');
+        $this->wire('config')->styles->add(wire('config')->urls->CookieMonster.'CookieMonster.css');
+        $this->wire('config')->scripts->add('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js');
+        $this->wire('config')->styles->add('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
 
         foreach ($this->defaults as $key => $value) {
             if (!isset($data[$key]) || $data[$key] == '') $data[$key] = $value;
+        }
+
+        if (isset($data['google_ads_conversions']) && is_array($data['google_ads_conversions'])) {
+            $data['google_ads_conversions'] = json_encode($data['google_ads_conversions'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         }
 
         $this->data = $data;
@@ -220,6 +228,19 @@ class CookieMonsterConfig extends Wire
         if($this->data['multilanguage'] == 1) $field->useLanguages = true;
         $statistics->append($field);
 
+        $ads = $modules->get('InputfieldFieldset');
+        $ads->label = __('Marketing / Werbung');
+        $ads->icon = 'bullhorn';
+        $fieldset->add($ads);
+
+        $field = $modules->get('InputfieldTextarea');
+        $field->label = __('Kurzbeschreibung für Marketing Cookies');
+        $field->attr('name', 'introtext_ads');
+        $field->attr('value', $this->data['introtext_ads']);
+        $field->columnWidth = '100';
+        if($this->data['multilanguage'] == 1) $field->useLanguages = true;
+        $ads->append($field);
+
         $field = $modules->get('InputfieldTextarea');
         $field->label = __('Statistik Cookies');
         $field->description = __('Geben Sie hier Informationen zu den notwendigen Cookies in folgendem Format ein');
@@ -304,6 +325,33 @@ class CookieMonsterConfig extends Wire
         $tab->add($field);
 
         $fields->add($tab);
+
+        $tab = new InputfieldWrapper();
+        $tab->attr("title", "Google Ads Conversions");
+        $tab->attr("class", "WireTab");
+
+        $fieldset = $modules->get('InputfieldMarkup');
+        $fieldset->label = __('Google Ads Conversions');
+        $fieldset->icon = 'google';
+        $fieldset->attr('id', 'google-ads-conversion-ui');
+        $fieldset->value = "<div id='google-ads-conversion-wrapper'></div><button type='button' class='ui-button add-conversion'>+ Conversion hinzufügen</button>";
+
+        $tab->add($fieldset);
+
+        $field = $modules->get('InputfieldHidden');
+        $field->attr('name', 'google_ads_conversions');
+        $field->attr('id', 'google_ads_conversions');
+        $field->attr('value', isset($this->data['google_ads_conversions']) ? html_entity_decode($this->data['google_ads_conversions']) : '');
+
+        $tab->add($field);
+
+        $fields->add($tab);
+
+        /*$debug = htmlentities($this->data['google_ads_conversions']);
+        $markup = $modules->get('InputfieldMarkup');
+        $markup->label = 'DEBUG: Saved JSON';
+        $markup->value = "<pre>$debug</pre>";
+        $tab->add($markup);*/
 
         return $fields;
     }

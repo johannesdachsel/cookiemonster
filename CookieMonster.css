@@ -221,3 +221,89 @@
 .cmnstr-details summary {
 	cursor: pointer;
 }
+
+#google-ads-conversion-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.conversion-entry {
+	border: 1px solid #ccc;
+	padding: 1rem;
+	background: inherit;
+	color: inherit;
+	border-radius: 6px;
+}
+
+.conversion-entry label {
+	display: block;
+	margin-bottom: 0.5em;
+	font-weight: 500;
+}
+
+.conversion-entry input[type="text"],
+.conversion-entry textarea,
+.conversion-entry select {
+	width: 100%;
+	padding: 4px;
+	margin-top: 2px;
+	box-sizing: border-box;
+}
+
+.conversion-entry hr {
+	margin-top: 1em;
+}
+
+.add-conversion{
+	margin-top: 10px;
+}
+
+button.remove-conversion {
+	margin-top: 0.5em;
+	background: #f44336;
+	color: white;
+	border: none;
+	padding: 6px 12px;
+	cursor: pointer;
+	border-radius: 4px;
+}
+
+.pages-select,
+.select2-container--default .select2-selection--multiple {
+	height: 120px;
+	min-width: 400px;
+	width: auto;
+}
+
+.select2-container--open .select2-dropdown {
+	width: auto !important;
+	min-width: 400px;
+}
+
+.pages-select .select2-container--default .select2-selection--multiple,
+.select2-container--default .select2-selection--single,
+.select2-container--default .select2-results__option {
+	background: transparent !important;
+	color: inherit !important;
+	border: 1px solid currentColor !important;
+}
+
+.pages-select .select2-container--default .select2-selection__rendered,
+.pages-select .select2-container--default .select2-search__field {
+	background: transparent !important;
+}
+
+.pages-select .select2-container--default .select2-selection__choice {
+	background: transparent !important;
+	color: inherit !important;
+	border: 1px solid currentColor !important;
+}
+
+.select2-container--default .select2-results__option--highlighted {
+	background: grey !important;
+	color: inherit !important;
+}
+
+
+
