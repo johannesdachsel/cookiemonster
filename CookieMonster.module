@@ -221,14 +221,14 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
 
         if (strpos($this->ga_property_id, 'GTM-') === 0) {
             $event->return = str_replace(
-                '</body>',
-                $this->renderGTM() . '</body>',
+                '</head>',
+                $this->renderGTM() . '</head>',
                 $event->return
             );
         } else {
             $event->return = str_replace(
-                '</body>',
-                $this->renderGATracking() . '</body>',
+                '</head>',
+                $this->renderGATracking() . '</head>',
                 $event->return
             );
         }
