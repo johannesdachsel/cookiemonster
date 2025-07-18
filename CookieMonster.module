@@ -240,20 +240,17 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
             $key = "{$id}/{$label}";
             if (in_array($key, $fired)) continue;
             $fired[] = $key;
-            $scripts .=
-                "<script>
-                    window.addEventListener('load', function() {
-                      if (typeof gtag === 'function') {
-                        gtag('event','conversion',{
-                            send_to:'AW-{$id}/{$label}'
-                        });
-                      }
-                    });
-                </script>\n";
+            $scripts .= "<script>
+window.addEventListener('load', function() {
+  if (typeof gtag === 'function') {
+    gtag('event','conversion',{send_to:'AW-{$id}/{$label}'});
+  }
+});
+</script>\n";
         }
 
         if ($scripts) {
-            $event->return = preg_replace('/<\/body>/', $scripts . '</body>', $output, 1);
+            $event->return = preg_replace('/<\/head>/', $scripts . '</head>', $output, 1);
         }
     }
 
@@ -270,14 +267,14 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
 
         if (strpos($this->ga_property_id, 'GTM-') === 0) {
             $event->return = str_replace(
-                '</head>',
-                $this->renderGTM() . '</head>',
+                '</body>',
+                $this->renderGTM() . '</body>',
                 $event->return
             );
         } else {
             $event->return = str_replace(
-                '</head>',
-                $this->renderGATracking() . '</head>',
+                '</body>',
+                $this->renderGATracking() . '</body>',
                 $event->return
             );
         }
@@ -298,6 +295,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         
+        <!-- Tag should not ever fire if not accepted @ banner but just in case set consent appropriately -->
         gtag('consent', 'default', {
               'analytics_storage': 'denied',
               'ad_storage': 'denied',
