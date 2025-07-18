@@ -57,6 +57,10 @@ class CookieMonsterConfig extends Wire
             }
         }
 
+        if (isset($data['google_ads_conversions']) && is_array($data['google_ads_conversions'])) {
+            $data['google_ads_conversions'] = json_encode($data['google_ads_conversions'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        }
+
         $this->data = $data;
     }
 
@@ -336,68 +340,6 @@ class CookieMonsterConfig extends Wire
         if($this->data['x_content_type_options_header'] == 0) $field->attr('checked', '');
         else $field->attr('checked', 1);
         $tab->add($field);
-
-        $fields->add($tab);
-
-        $tab = $modules->get('InputfieldWrapper');
-        $tab->attr("title", "Google Ads Conversions");
-        $tab->attr("class", "WireTab");
-
-        $count = $this->modules->get('InputfieldInteger');
-        $count->name = 'conversion_count';
-        $count->label = 'Number of Conversion Pairs';
-        $count->description = 'Set how many conversion pairs you want to configure.';
-        $count->attr('value', $this->data['conversion_count'] ?? 5);
-        $count->min = 1;
-        $count->max = 50;
-        $tab->add($count);
-
-        $maxConversions = $this->data['conversion_count'] ?? 5;
-        $conversions = $this->data['google_ads_conversions'] ?? [];
-
-        for ($index = 0; $index < $maxConversions; $index++) {
-            $conv = $conversions[$index] ?? [];
-
-            $fieldset = $modules->get('InputfieldFieldset');
-            $fieldset->label = "Conversion #" . ($index + 1);
-            $fieldset->icon = 'google';
-            $fieldset->collapsed = Inputfield::collapsedNo;
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][label]";
-            $f->label = "Label";
-            $f->value = $conv['label'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][id]";
-            $f->label = "Google Ads ID";
-            $f->value = $conv['id'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][description]";
-            $f->label = "Description";
-            $f->value = $conv['description'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldCheckbox');
-            $f->name = "google_ads_conversions[$index][active]";
-            $f->label = "Active";
-            $f->value = 1;
-            $f->checked = !empty($conv['active']);
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldPageListSelectMultiple');
-            $f->name = "google_ads_conversions_pages_$index";
-            $f->label = "Pages";
-            $f->value = $conv['pages'] ?? [];
-            $f->findPagesSelector = "template!=admin";
-            $f->labelFieldName = "title";
-            $fieldset->add($f);
-
-            $tab->add($fieldset);
-        }
 
         $fields->add($tab);
 

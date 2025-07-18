@@ -4,3 +4,4 @@ $(document).ready(function() {
         items: $("#ModuleEditForm > .Inputfields > .InputfieldWrapper"),
     });
 });
+

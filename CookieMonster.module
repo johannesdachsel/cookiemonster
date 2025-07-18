@@ -177,10 +177,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         if ($injected) return;
         $injected = true;
 
-        $output = $event->return;
-        $convs = is_array($this->data['google_ads_conversions'] ?? null)
-            ? $this->data['google_ads_conversions']
-            : [];
         if (empty($convs)) return;
         $pageId  = (int) $this->wire('page')->id;
         $scripts = '';
@@ -409,36 +405,5 @@ GTM;
     */
     public static function getModuleConfigInputfields(array $data)
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $postConversions = $_POST['google_ads_conversions'] ?? [];
-            $conversions = [];
-
-            foreach ($postConversions as $i => $entry) {
-                $label = trim($entry['label'] ?? '');
-                $id = trim($entry['id'] ?? '');
-
-                if ($label === '' && $id === '') continue;
-
-                $conversions[] = [
-                    'label'       => $label,
-                    'id'          => $id,
-                    'description' => trim($entry['description'] ?? ''),
-                    'active'      => !empty($entry['active']),
-                    'pages' => array_filter(array_map('intval', preg_split('/[,\s]+/', $_POST["google_ads_conversions_pages_$i"][0] ?? ''))),
-                ];
-            }
-
-            $data['google_ads_conversions'] = $conversions;
-
-            if (isset($_POST['conversion_count'])) {
-                $data['conversion_count'] = (int) $_POST['conversion_count'];
-            }
-
-            wire('modules')->saveConfig('CookieMonster', $data);
-            $data = wire('modules')->getConfig('CookieMonster');
-        }
-
-        require_once(__DIR__ . '/CookieMonsterConfig.php');
-        return (new CookieMonsterConfig($data))->getConfig();
-    }
+  	}
 }
