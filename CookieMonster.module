@@ -33,6 +33,33 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
 
         $this->addHookAfter("Page::render", $this, "sendHeaders");
 
+        $this->wire->addHook('/cookie-monster/pages-json', function(HookEvent $event) {
+            $result = [];
+            $home = wire('pages')->get(1);
+            $result[] = [
+                'id'    => $home->id,
+                'title' => $home->title,
+                'path'  => '',
+                'level' => 1
+            ];
+            $addPage = function($page, $level) use (&$addPage, &$result) {
+                foreach($page->children("template!=admin|trash") as $child) {
+                    $result[] = [
+                        'id'    => $child->id,
+                        'title' => $child->title,
+                        'path'  => trim($child->path, '/'),
+                        'level' => $level
+                    ];
+                    $addPage($child, $level + 1);
+                }
+            };
+            $addPage($home, 2);
+            header('Content-Type: application/json');
+            return json_encode($result);
+        });
+
+        $this->addHookProperty('Page::cookieMonsterPagesJson', $this, 'renderPagesJson');
+
         if (!$this->is_active) return;
 
         if (!isset($_COOKIE['cmnstr'])) {
@@ -57,6 +84,27 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         if ($this->allowAds) {
             $this->addHookAfter('Page::render', $this, 'addGoogleAdsConversions');
         }
+    }
+
+    public function renderPagesJson(HookEvent $event)
+    {
+        if (!$this->wire()->user->isSuperuser()) {
+            throw new WirePermissionException("Permission denied");
+        }
+
+        $out = [];
+        $pages = $this->wire()->pages->find("template!=admin, include=all");
+
+        foreach ($pages as $p) {
+            $out[] = [
+                'id' => $p->id,
+                'title' => $p->title . " (/" . $p->name . ")"
+            ];
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode($out);
+        $event->replace = true;
     }
 
     /*
@@ -177,10 +225,8 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         if ($injected) return;
         $injected = true;
 
-        $output = $event->return;
-        $convs = is_array($this->data['google_ads_conversions'] ?? null)
-            ? $this->data['google_ads_conversions']
-            : [];
+        $output  = $event->return;
+        $convs   = json_decode($this->data['google_ads_conversions'] ?? '[]', true);
         if (empty($convs)) return;
         $pageId  = (int) $this->wire('page')->id;
         $scripts = '';
@@ -409,36 +455,21 @@ GTM;
     */
     public static function getModuleConfigInputfields(array $data)
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $postConversions = $_POST['google_ads_conversions'] ?? [];
-            $conversions = [];
-
-            foreach ($postConversions as $i => $entry) {
-                $label = trim($entry['label'] ?? '');
-                $id = trim($entry['id'] ?? '');
-
-                if ($label === '' && $id === '') continue;
-
-                $conversions[] = [
-                    'label'       => $label,
-                    'id'          => $id,
-                    'description' => trim($entry['description'] ?? ''),
-                    'active'      => !empty($entry['active']),
-                    'pages' => array_filter(array_map('intval', preg_split('/[,\s]+/', $_POST["google_ads_conversions_pages_$i"][0] ?? ''))),
-                ];
-            }
-
-            $data['google_ads_conversions'] = $conversions;
-
-            if (isset($_POST['conversion_count'])) {
-                $data['conversion_count'] = (int) $_POST['conversion_count'];
-            }
-
-            wire('modules')->saveConfig('CookieMonster', $data);
-            $data = wire('modules')->getConfig('CookieMonster');
-        }
-
         require_once(__DIR__ . '/CookieMonsterConfig.php');
-        return (new CookieMonsterConfig($data))->getConfig();
+        $c = new CookieMonsterConfig($data);
+        return $c->getConfig();
     }
+
+    public function ___saveConfig($data) {
+        if (isset($data['google_ads_conversions']) && is_string($data['google_ads_conversions'])) {
+            $json = json_decode($data['google_ads_conversions'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $data['google_ads_conversions'] = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            } else {
+                $data['google_ads_conversions'] = '[]';
+            }
+        }
+        return $data;
+    }
+
 }

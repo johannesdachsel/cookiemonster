@@ -27,8 +27,7 @@ class CookieMonsterConfig extends Wire
         'table_placeholder' => '[[cookie-table]]',
         "referrer_policy_header" => "strict-origin-when-cross-origin",
         "strict_transport_security_header" => 31536000,
-        "x_content_type_options_header" => 0,
-        'conversion_count' => 2
+        "x_content_type_options_header" => 0
     );
 
     public function __construct(array $data)
@@ -39,22 +38,11 @@ class CookieMonsterConfig extends Wire
         $this->wire('config')->styles->add('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
 
         foreach ($this->defaults as $key => $value) {
-            if (!isset($data[$key]) || $data[$key] === '') {
-                $data[$key] = $value;
-            }
+            if (!isset($data[$key]) || $data[$key] == '') $data[$key] = $value;
         }
 
-        if (!empty($data['google_ads_conversions'])) {
-            if (is_string($data['google_ads_conversions'])) {
-                $decoded = json_decode($data['google_ads_conversions'],true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                    $data['google_ads_conversions'] = $decoded;
-                } else {
-                    $data['google_ads_conversions'] = [];
-                }
-            } elseif (!is_array($data['google_ads_conversions'])) {
-                $data['google_ads_conversions'] = [];
-            }
+        if (isset($data['google_ads_conversions']) && is_array($data['google_ads_conversions'])) {
+            $data['google_ads_conversions'] = json_encode($data['google_ads_conversions'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         }
 
         $this->data = $data;
@@ -62,7 +50,6 @@ class CookieMonsterConfig extends Wire
 
     public function getConfig()
     {
-
         $modules = wire('modules');
         $modules->get("JqueryWireTabs");
 
@@ -339,67 +326,32 @@ class CookieMonsterConfig extends Wire
 
         $fields->add($tab);
 
-        $tab = $modules->get('InputfieldWrapper');
+        $tab = new InputfieldWrapper();
         $tab->attr("title", "Google Ads Conversions");
         $tab->attr("class", "WireTab");
 
-        $count = $this->modules->get('InputfieldInteger');
-        $count->name = 'conversion_count';
-        $count->label = 'Number of Conversion Pairs';
-        $count->description = 'Set how many conversion pairs you want to configure.';
-        $count->attr('value', $this->data['conversion_count'] ?? 5);
-        $count->min = 1;
-        $count->max = 50;
-        $tab->add($count);
+        $fieldset = $modules->get('InputfieldMarkup');
+        $fieldset->label = __('Google Ads Conversions');
+        $fieldset->icon = 'google';
+        $fieldset->attr('id', 'google-ads-conversion-ui');
+        $fieldset->value = "<div id='google-ads-conversion-wrapper'></div><button type='button' class='ui-button add-conversion'>+ Conversion hinzufügen</button>";
 
-        $maxConversions = $this->data['conversion_count'] ?? 5;
-        $conversions = $this->data['google_ads_conversions'] ?? [];
+        $tab->add($fieldset);
 
-        for ($index = 0; $index < $maxConversions; $index++) {
-            $conv = $conversions[$index] ?? [];
+        $field = $modules->get('InputfieldHidden');
+        $field->attr('name', 'google_ads_conversions');
+        $field->attr('id', 'google_ads_conversions');
+        $field->attr('value', isset($this->data['google_ads_conversions']) ? html_entity_decode($this->data['google_ads_conversions']) : '');
 
-            $fieldset = $modules->get('InputfieldFieldset');
-            $fieldset->label = "Conversion #" . ($index + 1);
-            $fieldset->icon = 'google';
-            $fieldset->collapsed = Inputfield::collapsedNo;
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][label]";
-            $f->label = "Label";
-            $f->value = $conv['label'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][id]";
-            $f->label = "Google Ads ID";
-            $f->value = $conv['id'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldText');
-            $f->name = "google_ads_conversions[$index][description]";
-            $f->label = "Description";
-            $f->value = $conv['description'] ?? '';
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldCheckbox');
-            $f->name = "google_ads_conversions[$index][active]";
-            $f->label = "Active";
-            $f->value = 1;
-            $f->checked = !empty($conv['active']);
-            $fieldset->add($f);
-
-            $f = $modules->get('InputfieldPageListSelectMultiple');
-            $f->name = "google_ads_conversions_pages_$index";
-            $f->label = "Pages";
-            $f->value = $conv['pages'] ?? [];
-            $f->findPagesSelector = "template!=admin";
-            $f->labelFieldName = "title";
-            $fieldset->add($f);
-
-            $tab->add($fieldset);
-        }
+        $tab->add($field);
 
         $fields->add($tab);
+
+        /*$debug = htmlentities($this->data['google_ads_conversions']);
+        $markup = $modules->get('InputfieldMarkup');
+        $markup->label = 'DEBUG: Saved JSON';
+        $markup->value = "<pre>$debug</pre>";
+        $tab->add($markup);*/
 
         return $fields;
     }
