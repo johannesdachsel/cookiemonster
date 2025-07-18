@@ -249,7 +249,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         
-        <!-- Tag should not ever fire if not accepted @ banner but just in case set consent appropriately -->
         gtag('consent', 'default', {
               'analytics_storage': 'denied',
               'ad_storage': 'denied',
