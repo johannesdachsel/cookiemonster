@@ -340,6 +340,7 @@ class CookieMonsterConfig extends Wire
         $fields->add($tab);
 
         $tab = $modules->get('InputfieldWrapper');
+        if (!$tab) $tab = new InputfieldWrapper();
         $tab->attr("title", "Google Ads Conversions");
         $tab->attr("class", "WireTab");
 

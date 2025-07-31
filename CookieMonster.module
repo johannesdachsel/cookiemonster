@@ -50,7 +50,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
             $this->allowAds = true;
         }
 
-        if ($this->allowTracking && $this->ga_property_id) {
+        if ($this->allowTracking) {
             $this->addHookAfter('Page::render', $this, 'addTrackingCode');
         }
 
@@ -204,14 +204,43 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         }
 
         if ($scripts) {
-            $event->return = preg_replace('/<\/body>/', $scripts . '</body>', $output, 1);
+            $event->return = preg_replace('/<\/head>/', $scripts . '</head>', $output, 1);
+        }
+    }
+
+    /*
+     * addCustomTags
+     *
+     * this is an extra feature to load tags put in /tags dir. Exists only because of ihk-weiterbildungen...
+     *
+     * Expects the tags to be in singular files in script tags.
+     *
+     */
+
+    public function addCustomTags($event) {
+        $tagsDir = $this->wire('config')->paths->get($this) . 'tags/';
+        if (!is_dir($tagsDir)) return;
+
+        $output = $event->return;
+        $tagFiles = glob($tagsDir . '*');
+        $tagsContent = '';
+
+        foreach ($tagFiles as $file) {
+            if (is_file($file)) {
+                $tagsContent .= file_get_contents($file) . "\n";
+            }
+        }
+
+        if ($tagsContent) {
+            $output = preg_replace('/<\/head>/', $tagsContent . '</head>', $output, 1);
+            $event->return = $output;
         }
     }
 
     /*
     * addTrackingCode
     *
-    * Appends Google Analytics Tracking Code to the <body>-element
+    * Appends Google Analytics Tracking Code
     */
     public function addTrackingCode($event)
     {
@@ -219,20 +248,23 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
 
         if (in_array($page->template, ["admin", "form-builder"])) return;
 
-        if (strpos($this->ga_property_id, 'GTM-') === 0) {
-            $event->return = str_replace(
-                '</head>',
-                $this->renderGTM() . '</head>',
-                $event->return
-            );
-        } else {
-            $event->return = str_replace(
-                '</head>',
-                $this->renderGATracking() . '</head>',
-                $event->return
-            );
+        if ($this->ga_property_id) {
+            if (strpos($this->ga_property_id, 'GTM-') === 0) {
+                $event->return = str_replace(
+                    '</head>',
+                    $this->renderGTM() . '</head>',
+                    $event->return
+                );
+            } else {
+                $event->return = str_replace(
+                    '</head>',
+                    $this->renderGATracking() . '</head>',
+                    $event->return
+                );
+            }
         }
 
+        $this->addCustomTags($event);
     }
 
     /*
