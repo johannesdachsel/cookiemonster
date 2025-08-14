@@ -20,6 +20,7 @@ class CookieMonsterConfig extends Wire
         'imprint_page' => null,
         'cookies_necessary' => "wire|my-domain.de|Der Cookie ist für die sichere Anmeldung und die Erkennung von Spam oder Missbrauch der Webseite erforderlich.|Session\ncmnstr|my-domain.de|Speichert den Zustimmungsstatus des Benutzers für Cookies.|1 Jahr",
         'cookies_statistics' => "_ga|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren.|2 Jahre\n_gat|Google|Wird von Google Analytics verwendet, um die Anforderungsrate einzuschränken.|1 Tag\n_gid|Google|Registriert eine eindeutige ID, die verwendet wird, um statistische Daten dazu, wie der Besucher die Website nutzt, zu generieren|1 Tag",
+        'cookies_ads' => "_fbp|Facebook|Wird von Facebook verwendet, um eine Reihe von Werbeprodukten anzuzeigen, wie zum Beispiel Echtzeitgebote von Dritten.|3 Monate\nGoogleAdServingTest|Google|Wird verwendet, um die Effizienz der Werbung auf Websites zu registrieren und zu melden.|Session",
         'introtext_necessary' => 'Notwendige Cookies helfen dabei, eine Webseite nutzbar zu machen, indem sie Grundfunktionen wie Seitennavigation und Zugriff auf sichere Bereiche der Webseite ermöglichen. Die Webseite kann ohne diese Cookies nicht richtig funktionieren.',
         'introtext_statistics' => 'Statistik-Cookies helfen Webseiten-Besitzern zu verstehen, wie Besucher mit Webseiten interagieren, indem Informationen anonym gesammelt und gemeldet werden.',
         'introtext_ads' => 'Wir verwenden Cookies von Drittanbietern, um Ihnen personalisierte Werbung anzuzeigen.',
@@ -28,7 +29,8 @@ class CookieMonsterConfig extends Wire
         "referrer_policy_header" => "strict-origin-when-cross-origin",
         "strict_transport_security_header" => 31536000,
         "x_content_type_options_header" => 0,
-        'conversion_count' => 2
+        'conversion_count' => 2,
+        'google_ads_conversions' => []
     );
 
     public function __construct(array $data)
@@ -39,7 +41,7 @@ class CookieMonsterConfig extends Wire
         $this->wire('config')->styles->add('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
 
         foreach ($this->defaults as $key => $value) {
-            if (!isset($data[$key]) || $data[$key] === '') {
+            if (!isset($data[$key])) {
                 $data[$key] = $value;
             }
         }
@@ -55,6 +57,8 @@ class CookieMonsterConfig extends Wire
             } elseif (!is_array($data['google_ads_conversions'])) {
                 $data['google_ads_conversions'] = [];
             }
+        } else {
+            $data['google_ads_conversions'] = [];
         }
 
         $this->data = $data;
@@ -62,7 +66,6 @@ class CookieMonsterConfig extends Wire
 
     public function getConfig()
     {
-
         $modules = wire('modules');
         $modules->get("JqueryWireTabs");
 
@@ -81,9 +84,10 @@ class CookieMonsterConfig extends Wire
         $field->label = __('Cookie-Banner aktiviert');
         $field->notes = __('Aktiviert die Anzeige des Cookie-Banners auf allen Seiten.');
         $field->name = 'is_active';
-        $field->attr('value', $this->data['is_active']);
-        if($this->data['is_active'] == 0) $field->attr('checked', '');
-        else $field->attr('checked', 1);
+        $field->attr('value', 1);
+        if($this->data['is_active']) {
+            $field->attr('checked', 'checked');
+        }
         $field->columnWidth = '34';
         $fieldset->append($field);
 
@@ -91,9 +95,10 @@ class CookieMonsterConfig extends Wire
         $field->label = __('CookieMonster-Stylesheet verwenden');
         $field->notes = __('Stellt eine einfache Basis-Formatierung zur Verfügung.');
         $field->name = 'use_stylesheet';
-        $field->attr('value', $this->data['use_stylesheet']);
-        if($this->data['use_stylesheet'] == 0) $field->attr('checked', '');
-        else $field->attr('checked', 1);
+        $field->attr('value', 1);
+        if($this->data['use_stylesheet']) {
+            $field->attr('checked', 'checked');
+        }
         $field->columnWidth = '33';
         $fieldset->append($field);
 
@@ -102,14 +107,13 @@ class CookieMonsterConfig extends Wire
         $field->notes = __('Aktiviert mehrsprachig pflegbare Texte.');
         $field->name = 'multilanguage';
         $field->attr('value', $this->data['multilanguage']);
-        if($this->data['multilanguage'] == 0) $field->attr('checked', '');
-        else $field->attr('checked', 1);
+        if($this->data['multilanguage'] == 1) $field->attr('checked', 'checked');
         $field->columnWidth = '33';
         $fieldset->append($field);
 
         $field = $modules->get('InputfieldText');
         $field->label = __('Platzhalter für Cookie-Übersicht');
-        $field->description = __('Dieser Platzhalter wird beim Seitenaufruf durch die Cookie-Übersicht ersetzt. So kann die die Cookie-Übersicht z.B. in der Datenschtuzerklärung ausgegeben werden.');
+        $field->description = __('Dieser Platzhalter wird beim Seitenaufruf durch die Cookie-Übersicht ersetzt. So kann die die Cookie-Übersicht z.B. in der Datenschutzerkärung ausgegeben werden.');
         $field->notes = __('Voraussetzung: der TextformatterCookieTable muss installiert und in der entsprechenden Feldkonfiguration ausgewählt sein.');
         $field->attr('name', 'table_placeholder');
         $field->attr('value', $this->data['table_placeholder']);
@@ -142,11 +146,12 @@ class CookieMonsterConfig extends Wire
 
         $field = $modules->get('InputfieldCheckbox');
         $field->label = __('Begriff automatisch verlinken');
-        $field->notes = __('Aktiviert die automatische Verlinkung eines Begriffs (z.B. „Datenschutz“) mit einer frei wählbaren Seite.');
+        $field->notes = __('Aktiviert die automatische Verlinkung eines Begriffs (z.B. „Datenschutz") mit einer frei wählbaren Seite.');
         $field->name = 'autolink';
-        $field->attr('value', $this->data['autolink']);
-        if($this->data['autolink'] == 0) $field->attr('checked', '');
-        else $field->attr('checked', 1);
+        $field->attr('value', 1);
+        if($this->data['autolink']) {
+            $field->attr('checked', 'checked');
+        }
         $field->columnWidth = '30';
         $fieldset->append($field);
 
@@ -241,6 +246,16 @@ class CookieMonsterConfig extends Wire
         if($this->data['multilanguage'] == 1) $field->useLanguages = true;
         $statistics->append($field);
 
+        $field = $modules->get('InputfieldTextarea');
+        $field->label = __('Statistik Cookies');
+        $field->description = __('Geben Sie hier Informationen zu den notwendigen Cookies in folgendem Format ein');
+        $field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf');
+        $field->attr('name', 'cookies_statistics');
+        $field->attr('value', $this->data['cookies_statistics']);
+        $field->columnWidth = '100';
+        if($this->data['multilanguage'] == 1) $field->useLanguages = true;
+        $statistics->append($field);
+
         $ads = $modules->get('InputfieldFieldset');
         $ads->label = __('Marketing / Werbung');
         $ads->icon = 'bullhorn';
@@ -255,17 +270,16 @@ class CookieMonsterConfig extends Wire
         $ads->append($field);
 
         $field = $modules->get('InputfieldTextarea');
-        $field->label = __('Statistik Cookies');
-        $field->description = __('Geben Sie hier Informationen zu den notwendigen Cookies in folgendem Format ein');
+        $field->label = __('Marketing Cookies');
+        $field->description = __('Geben Sie hier Informationen zu den Marketing-Cookies in folgendem Format ein');
         $field->notes = __('Folgendes Format verwenden: Name|Anbieter|Zweck|Ablauf');
-        $field->attr('name', 'cookies_statistics');
-        $field->attr('value', $this->data['cookies_statistics']);
+        $field->attr('name', 'cookies_ads');
+        $field->attr('value', $this->data['cookies_ads']);
         $field->columnWidth = '100';
         if($this->data['multilanguage'] == 1) $field->useLanguages = true;
-        $statistics->append($field);
+        $ads->append($field);
 
         $fields->add($tab);
-
 
         $tab = new InputfieldWrapper();
         $tab->attr("title", "Tracking");
@@ -296,8 +310,6 @@ class CookieMonsterConfig extends Wire
         $tab->attr("title", "Header");
         $tab->attr("class", "WireTab");
 
-
-        /** @var InputfieldCheckboxes $field */
         $field = $modules->get("InputfieldRadios");
         $field->label = "Referrer-Policy-Header";
         $field->description = "Der Referrer-Policy-HTTP-Header steuert, wie viele Referrer-Informationen (die mit dem Referer-Header gesendet werden) in Anfragen enthalten sein sollen.";
@@ -316,7 +328,6 @@ class CookieMonsterConfig extends Wire
         $field->attr("value", $this->data["referrer_policy_header"]);
         $tab->add($field);
 
-        /** @var InputfieldInteger $field */
         $field = $modules->get("InputfieldInteger");
         $field->label = "Strict Transport Security: max-age";
         $field->description = "Der HTTP Strict-Transport-Security-Antwortheader (oft als HSTS abgekürzt) informiert Browser darüber, dass auf die Website nur über HTTPS zugegriffen werden sollte und dass alle zukünftigen Zugriffsversuche über HTTP automatisch in HTTPS konvertiert werden sollten.";
@@ -325,35 +336,34 @@ class CookieMonsterConfig extends Wire
         $field->attr("value", $this->data["strict_transport_security_header"]);
         $tab->add($field);
 
-        /** @var InputfieldCheckbox $field */
         $field = $modules->get("InputfieldCheckbox");
         $field->label = "X-Content-Type-Options";
         $field->checkboxLabel = "Header auf `nosniff` setzen";
         $field->description = "Der HTTP Response header X-Content-Type-Options ist eine Markierung, die vom Server verwendet wird, um anzuzeigen, dass die in den Content-Type-Headern angekündigten MIME-Typen befolgt und nicht geändert werden sollten. Der Header ermöglicht es Ihnen, MIME-Typ-Sniffing zu vermeiden, indem Sie sagen, dass die MIME-Typen absichtlich konfiguriert sind. Website-Sicherheitstester erwarten normalerweise, dass dieser Header gesetzt wird.";
         $field->notes = "Nähere Informationen: [X-Content-Type-Options auf MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options)";
         $field->name = "x_content_type_options_header";
-        $field->attr('value', $this->data['x_content_type_options_header']);
-        if($this->data['x_content_type_options_header'] == 0) $field->attr('checked', '');
-        else $field->attr('checked', 1);
+        $field->attr('value', 1);
+        if($this->data['x_content_type_options_header']) {
+            $field->attr('checked', 'checked');
+        }
         $tab->add($field);
 
         $fields->add($tab);
 
-        $tab = $modules->get('InputfieldWrapper');
-        if (!$tab) $tab = new InputfieldWrapper();
+        $tab = new InputfieldWrapper();
         $tab->attr("title", "Google Ads Conversions");
         $tab->attr("class", "WireTab");
 
-        $count = $this->modules->get('InputfieldInteger');
+        $count = $modules->get('InputfieldInteger');
         $count->name = 'conversion_count';
-        $count->label = 'Number of Conversion Pairs';
-        $count->description = 'Set how many conversion pairs you want to configure.';
-        $count->attr('value', $this->data['conversion_count'] ?? 5);
+        $count->label = 'Anzahl der Conversion-Paare';
+        $count->description = 'Legen Sie fest, wie viele Conversion-Paare Sie konfigurieren möchten.';
+        $count->attr('value', $this->data['conversion_count'] ?? 2);
         $count->min = 1;
         $count->max = 50;
         $tab->add($count);
 
-        $maxConversions = $this->data['conversion_count'] ?? 5;
+        $maxConversions = $this->data['conversion_count'] ?? 2;
         $conversions = $this->data['google_ads_conversions'] ?? [];
 
         for ($index = 0; $index < $maxConversions; $index++) {
@@ -366,37 +376,80 @@ class CookieMonsterConfig extends Wire
 
             $f = $modules->get('InputfieldText');
             $f->name = "google_ads_conversions[$index][label]";
-            $f->label = "Label";
+            $f->label = "Bezeichnung";
             $f->value = $conv['label'] ?? '';
+            $f->columnWidth = 50;
             $fieldset->add($f);
 
             $f = $modules->get('InputfieldText');
             $f->name = "google_ads_conversions[$index][id]";
             $f->label = "Google Ads ID";
             $f->value = $conv['id'] ?? '';
+            $f->columnWidth = 50;
             $fieldset->add($f);
 
             $f = $modules->get('InputfieldText');
             $f->name = "google_ads_conversions[$index][description]";
-            $f->label = "Description";
+            $f->label = "Beschreibung";
             $f->value = $conv['description'] ?? '';
             $fieldset->add($f);
 
             $f = $modules->get('InputfieldCheckbox');
             $f->name = "google_ads_conversions[$index][active]";
-            $f->label = "Active";
+            $f->label = "Aktiv";
             $f->value = 1;
             $f->checked = !empty($conv['active']);
+            $f->columnWidth = 100;
             $fieldset->add($f);
+
+            $triggerFieldset = $modules->get('InputfieldFieldset');
+            $triggerFieldset->label = "Auslösemethoden";
+            $triggerFieldset->description = "Wählen Sie, wann diese Conversion ausgelöst werden soll";
+            $triggerFieldset->icon = 'play';
+
+            $pageCheckbox = $modules->get('InputfieldCheckbox');
+            $pageCheckbox->name = "trigger_on_page_$index";
+            $pageCheckbox->label = "✓ Auslösen bei Seitenaufruf";
+            $pageCheckbox->description = "Conversion auslösen, wenn bestimmte Seiten geladen werden";
+            $pageCheckbox->value = 1;
+            $pageCheckbox->checked = !empty($conv['trigger_on_page']);
+            $pageCheckbox->columnWidth = 50;
+            $triggerFieldset->add($pageCheckbox);
+
+            $formCheckbox = $modules->get('InputfieldCheckbox');
+            $formCheckbox->name = "trigger_on_form_$index";
+            $formCheckbox->label = "✓ Auslösen bei erfolgreicher Formularübermittlung";
+            $formCheckbox->description = "Conversion auslösen, wenn Formulare erfolgreich gesendet werden";
+            $formCheckbox->value = 1;
+            $formCheckbox->checked = !empty($conv['trigger_on_form']);
+            $formCheckbox->columnWidth = 50;
+            $triggerFieldset->add($formCheckbox);
 
             $f = $modules->get('InputfieldPageListSelectMultiple');
             $f->name = "google_ads_conversions_pages_$index";
-            $f->label = "Pages";
+            $f->label = "Seiten (für Seitenaufruf-Trigger)";
+            $f->description = "Seiten auswählen – wird nur verwendet, wenn 'Auslösen bei Seitenaufruf' oben aktiviert ist";
             $f->value = $conv['pages'] ?? [];
             $f->findPagesSelector = "template!=admin";
             $f->labelFieldName = "title";
-            $fieldset->add($f);
+            $triggerFieldset->add($f);
 
+            $availableForms = [
+                'anmeldung' => 'Anmeldung',
+                'anmeldung-lg' => 'Anmeldung LG',
+                'anfrage-firmenangebote' => 'Anfrage Firmenangebote',
+                'kontaktformular' => 'Kontaktformular'
+            ];
+
+            $f = $modules->get('InputfieldCheckboxes');
+            $f->name = "google_ads_conversions_forms_$index";
+            $f->label = "Formulare (für Formular-Trigger)";
+            $f->description = "Formulare auswählen – wird nur verwendet, wenn 'Auslösen bei erfolgreicher Formularübermittlung' oben aktiviert ist";
+            $f->addOptions($availableForms);
+            $f->value = $conv['form_names'] ?? [];
+            $triggerFieldset->add($f);
+
+            $fieldset->add($triggerFieldset);
             $tab->add($fieldset);
         }
 

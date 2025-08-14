@@ -9,7 +9,7 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
     {
         return [
             'title' => 'CookieMonster',
-            'version' => 240,
+            'version' => 300,
             'summary' => 'Add a cookie banner, integrate tracking and send relevant headers.',
             'href' => 'https://github.com/johannesdachsel/cookiemonster',
             'singular' => true,
@@ -21,16 +21,11 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
     }
 
     public $allowTracking = false;
+    public $allowAds = false;
+    private $formConversionsToFire = [];
 
-
-    /*
-    * Module initialization
-    *
-    */
     public function init()
     {
-        if(!wire('user')->isSuperuser()) return;
-
         $this->addHookAfter("Page::render", $this, "sendHeaders");
 
         if (!$this->is_active) return;
@@ -56,14 +51,37 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
 
         if ($this->allowAds) {
             $this->addHookAfter('Page::render', $this, 'addGoogleAdsConversions');
+            $this->addFormBuilderHook();
         }
     }
 
-    /*
-    * addCookieBanner
-    *
-    * Adds cookie banner, scripts and styles
-    */
+    public function addFormBuilderHook()
+    {
+        $this->addHookAfter('FormBuilderProcessor::renderSuccess', function($event) {
+            $processor = $event->object;
+            $formName = $processor->formName;
+
+            if (!$this->allowAds || empty($this->data['google_ads_conversions'])) return;
+
+            $conversions = $this->data['google_ads_conversions'];
+
+            foreach ($conversions as $conv) {
+                if (empty($conv['active']) || empty($conv['trigger_on_form'])) continue;
+
+                if (!empty($conv['form_names']) && !in_array($formName, $conv['form_names'])) continue;
+
+                $id = trim($conv['id']);
+                $label = trim($conv['label']);
+                if ($id && $label) {
+                    $this->formConversionsToFire[] = [
+                        'id' => $id,
+                        'label' => $label
+                    ];
+                }
+            }
+        });
+    }
+
     public function addCookieBanner($event)
     {
         $page = $event->object;
@@ -123,6 +141,10 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
             $statCount = count(explode("\n", $this->{"cookies_statistics$lang"}));
             $cookieBanner .= '<li><a href="#cmnstr-details-statistics">' . __("Statistiken") . ' (' . $statCount . ')</a></li>';
         }
+        if ($this->{"introtext_ads$lang"}) {
+            $adsCount = count(explode("\n", $this->{"cookies_ads$lang"}));
+            $cookieBanner .= '<li><a href="#cmnstr-details-ads">' . __("Werbung") . ' (' . $adsCount . ')</a></li>';
+        }
 
         $cookieBanner .= '</ul>
 								<div class="cmnstr-tabs-container">
@@ -135,6 +157,12 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
             $cookieBanner .= '<div id="cmnstr-details-statistics">
 									<p>' . $this->{"introtext_statistics$lang"} . '</p>';
             $cookieBanner .= $this->renderCookieTable($this->{"cookies_statistics$lang"});
+            $cookieBanner .= '</div>';
+        }
+        if ($this->{"introtext_ads$lang"}) {
+            $cookieBanner .= '<div id="cmnstr-details-ads">
+                        <p>' . $this->{"introtext_ads$lang"} . '</p>';
+            $cookieBanner .= $this->renderCookieTable($this->{"cookies_ads$lang"});
             $cookieBanner .= '</div>';
         }
 
@@ -153,20 +181,16 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         $output = $event->return;
         $folder = $this->wire('config')->urls->$this;
 
-        // inject stylesheet
         if ($this->use_stylesheet) {
             $output = str_replace("</head>", "<link rel='stylesheet' type='text/css' href='{$folder}{$this}.css'></head>", $output);
         }
 
-        // inject script file
         $output = str_replace("</head>", "<script src='{$folder}{$this}.js'></script></head>", $output);
 
-        // inject polyfill for IE11 and below
         if (preg_match('~MSIE|Internet Explorer~i', $_SERVER['HTTP_USER_AGENT']) || (strpos($_SERVER['HTTP_USER_AGENT'], 'Trident/7.0; rv:11.0') !== false)) {
             $output = str_replace("</head>", "<script src='{$folder}details-polyfill.js'></script></head>", $output);
         }
 
-        // append cookie banner
         $regex = '/(<body[^>]*>)/m';
         $replace = '$1' . $cookieBanner;
         $event->return = preg_replace($regex, $replace, $output);
@@ -182,40 +206,53 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
             ? $this->data['google_ads_conversions']
             : [];
         if (empty($convs)) return;
-        $pageId  = (int) $this->wire('page')->id;
+
+        $pageId = (int) $this->wire('page')->id;
         $scripts = '';
-        $fired   = [];
+        $fired = [];
 
         foreach ($convs as $conv) {
-            if (empty($conv['active']) || !in_array($pageId, $conv['pages'] ?? [])) continue;
-            $id    = trim($conv['id']);
+            if (empty($conv['active']) ||
+                empty($conv['trigger_on_page']) ||
+                !in_array($pageId, $conv['pages'] ?? [])) continue;
+
+            $id = trim($conv['id']);
             $label = trim($conv['label']);
             if (!$id || !$label) continue;
             $key = "{$id}/{$label}";
             if (in_array($key, $fired)) continue;
             $fired[] = $key;
             $scripts .= "<script>
+                    window.addEventListener('load', function() {
+                      if (typeof gtag === 'function') {
+                        gtag('event','conversion',{send_to:'AW-{$id}/{$label}'});
+                      }
+                    });
+                    </script>\n";
+        }
+
+        if (!empty($this->formConversionsToFire)) {
+            foreach ($this->formConversionsToFire as $conv) {
+                $id = $conv['id'];
+                $label = $conv['label'];
+                $key = "{$id}/{$label}";
+                if (in_array($key, $fired)) continue;
+                $fired[] = $key;
+                $scripts .= "<script>
                         window.addEventListener('load', function() {
                           if (typeof gtag === 'function') {
                             gtag('event','conversion',{send_to:'AW-{$id}/{$label}'});
                           }
                         });
                         </script>\n";
+            }
+            $this->formConversionsToFire = [];
         }
 
         if ($scripts) {
             $event->return = preg_replace('/<\/head>/', $scripts . '</head>', $output, 1);
         }
     }
-
-    /*
-     * addCustomTags
-     *
-     * this is an extra feature to load tags put in /tags dir. Exists only because of ihk-weiterbildungen...
-     *
-     * Expects the tags to be in singular files in script tags.
-     *
-     */
 
     public function addCustomTags($event) {
         $tagsDir = $this->wire('config')->paths->get($this) . 'tags/';
@@ -237,11 +274,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         }
     }
 
-    /*
-    * addTrackingCode
-    *
-    * Appends Google Analytics Tracking Code
-    */
     public function addTrackingCode($event)
     {
         $page = $event->object;
@@ -267,11 +299,6 @@ class CookieMonster extends WireData implements Module, ConfigurableModule
         $this->addCustomTags($event);
     }
 
-    /*
-    * renderCookieTable
-    *
-    * Helper function to render Google Analytics Javascript snippet
-    */
     public function renderGATracking()
     {
         $out = <<<TRACKING
@@ -304,11 +331,6 @@ TRACKING;
         return $out;
     }
 
-    /*
-    * renderCookieTable
-    *
-    * Helper function to render a table view for a given cookie config field
-    */
     public function renderCookieTable($cookiefield)
     {
         if (!$cookiefield || empty($cookiefield)) return;
@@ -335,9 +357,6 @@ TRACKING;
         return $out;
     }
 
-    /**
-     * Helper function to render the Google Tag Manager container snippet
-     */
     public function renderGTM()
     {
         $id = $this->ga_property_id;
@@ -431,11 +450,6 @@ GTM;
         }
     }
 
-    /*
-    * getModuleConfigInputfields
-    *
-    * Module Configuration Panel
-    */
     public static function getModuleConfigInputfields(array $data)
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -448,12 +462,25 @@ GTM;
 
                 if ($label === '' && $id === '') continue;
 
+                $formNames = $_POST["google_ads_conversions_forms_$i"] ?? [];
+
+                $pages = [];
+                if (isset($_POST["google_ads_conversions_pages_$i"]) && is_array($_POST["google_ads_conversions_pages_$i"])) {
+                    $pages = array_filter(array_map('intval', $_POST["google_ads_conversions_pages_$i"]));
+                }
+
+                $triggerOnPage = !empty($_POST["trigger_on_page_$i"]);
+                $triggerOnForm = !empty($_POST["trigger_on_form_$i"]);
+
                 $conversions[] = [
-                    'label'       => $label,
-                    'id'          => $id,
+                    'label' => $label,
+                    'id' => $id,
                     'description' => trim($entry['description'] ?? ''),
-                    'active'      => !empty($entry['active']),
-                    'pages' => array_filter(array_map('intval', preg_split('/[,\s]+/', $_POST["google_ads_conversions_pages_$i"][0] ?? ''))),
+                    'active' => !empty($entry['active']),
+                    'trigger_on_page' => $triggerOnPage,
+                    'trigger_on_form' => $triggerOnForm,
+                    'form_names' => $formNames,
+                    'pages' => $pages,
                 ];
             }
 
